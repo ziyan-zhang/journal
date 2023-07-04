@@ -122,3 +122,6 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+# linux被编译到该文件夹
+./Linux_compiled
