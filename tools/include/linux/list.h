@@ -138,6 +138,8 @@ static inline void list_replace_init(struct list_head *old,
 
 /**
  * list_del_init - deletes entry from list and reinitialize it.
+ * 
+ * 从列表中删除条目并重新初始化该条目
  * @entry: the element to delete from the list.
  */
 static inline void list_del_init(struct list_head *entry)

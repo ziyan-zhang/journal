@@ -65,6 +65,8 @@ static inline void __buffer_unlink(struct zjournal_head *jh)
 
 /*
  * Move a buffer from the checkpoint list to the checkpoint io list
+ * 
+ * 把一个缓冲区从检查点列表移动到检查点io列表
  *
  * Called with j_list_lock held
  */
@@ -85,21 +87,25 @@ static inline void __buffer_relink_io(struct zjournal_head *jh)
 	transaction->t_checkpoint_io_list = jh;
 }
 
+// 收集依赖加上判断依赖是否要从列表中删除（如果已完成）
 static inline void __zj_mark_enqueue(ztransaction_t *transaction, 
 					ztransaction_t *rel_transaction, commit_mark_t *buf)
 {
-	commit_entry_t *tc, *tc_next;
+	commit_entry_t *tc, *tc_next;	// commit_enrty_t是一个结构体，包含了core、tid、state、debug和pos
 	int index, jid;
 	int check_num;
 	tid_t tid;
-	LIST_HEAD(mark_list);
+	LIST_HEAD(mark_list);	// 初始化一个prev和next都指向自身的空链表
 
+	// rel应该是指relay，依赖的transaction
 	J_ASSERT(rel_transaction->t_state == T_FINISHED);
 
 	index = 0;
 	check_num = 0;
 
 	spin_lock(&rel_transaction->t_mark_lock);
+	// 将rel_transaction的t_check_mark_list中的所有元素都加入到mark_list中
+	// 对应论文中的递归的依赖检查？这里是收集到所有递归的依赖？
 	list_for_each_entry(tc, &rel_transaction->t_check_mark_list, pos) {
 		commit_entry_t *new_mark;
 		index++;
@@ -121,27 +127,32 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 	tid = transaction->t_tid;
 
 	// 일단 미리 할당해서 만들어놓고 임시 리스트에 걸어놓는다.
+	// 预分配、创建并将其挂在临时列表上
 	spin_lock(&transaction->t_mark_lock);
+	// list(ptr, type, member)，根据type->member实例ptr返回type实例的地址
 	tc_next = list_entry(mark_list.next, commit_entry_t, pos);
+	// 这里是依赖收集完了开始判断依赖，把已经完成的commit_entry_t删除？
 	do {
 		int mark_core, mark_tid;
 		tc = tc_next;
-		tc_next = list_next_entry(tc, pos);
+		tc_next = list_next_entry(tc, pos);	// 返回由tc->pos链接的下一个tc
 
 		mark_core = tc->core;
 		mark_tid = tc->tid;
+		// 如果是自己的标记，或者在事务的完成标记列表中，或者在事务的检查标记列表中
 		if ((tid == mark_tid && jid == mark_core) ||
 			zj_check_mark_value_in_list(&transaction->t_complete_mark_list, 
 						mark_core, mark_tid) ||
 			zj_check_mark_value_in_list(&transaction->t_check_mark_list, 
-					mark_core, mark_tid)) {
-			list_del_init(&tc->pos);
-			zj_free_commit(tc);
+						mark_core, mark_tid)) {
+			list_del_init(&tc->pos);	// 从临时列表中删除tc->pos并重新初始化tc->pos
+			zj_free_commit(tc);		// 释放tc, 将其内存重新放回zj_commit_cache中？
 			check_num--;
 		}
-	} while(&mark_list != &tc_next->pos);
+	} while(&mark_list != &tc_next->pos);	// 直到链表自己追上自己，就是说遍历完了？
 
 	// temp list의 mark 들을 transaction의 check mark list로 이동
+	// 将临时列表中的标记移动到事务的检查标记列表中
 	if (transaction->t_real_commit) {
 		printk(KERN_ERR "(%d, %d) already real commit 2, state: %d\n", transaction->t_journal->j_core_id, transaction->t_tid, transaction->t_real_commit_state);
 		if (list_empty(&transaction->t_check_mark_list)) {
@@ -242,9 +253,11 @@ retry_mark:
 		cur_mark->state = 1;
 		spin_unlock(&transaction->t_mark_lock);
 
+		// 在journal[core]中找tid。从journal-core的committing, running, checkpoint_tx_tree里面依次找
 		rel_transaction = zj_get_target_transaction(journal, 
 				cur_mark->core, cur_mark->tid);
 
+		// 如果依赖tx不存在或tx就是依赖tx，跳转到mark_complete
 		if (!rel_transaction || transaction == rel_transaction)
 			goto mark_complete;
 
@@ -272,6 +285,7 @@ retry_mark:
 				return 3;
 			}
 
+			// 这个是checkpoint_real_commit，所以要等到commit再往下走，等待期间让出cpu
 			zj_log_start_commit(rel_journal, rel_transaction->t_tid);
 			zj_log_wait_commit(rel_journal, rel_transaction->t_tid);
 			read_lock(&rel_journal->j_state_lock);
@@ -279,14 +293,17 @@ retry_mark:
 		read_unlock(&rel_journal->j_state_lock);
 
 		// rel_transaction의 check list에 있는 mark들을 enqueue
+		// 将mark放入rel_transaction的check list
 		__zj_mark_enqueue(transaction, rel_transaction, buf);
 
 mark_complete:
 		spin_lock(&transaction->t_mark_lock);
 		// complete list로 이동
+		// 转到complete list
 		transaction->t_check_num--;
 		list_del_init(&cur_mark->pos);
 		cur_mark->state = 0;
+		// 如果依赖事务就是当前事务，或者cur_mark已经在tx->complete mark list中，从commit_cache中释放cur_mark的内存
 		if (rel_transaction == transaction || 
 			zj_check_mark_value_in_list(&transaction->t_complete_mark_list, 
 				cur_mark->core, cur_mark->tid)) {
@@ -322,6 +339,9 @@ mark_complete:
  * Try to release a checkpointed buffer from its transaction.
  * Returns 1 if we released it and 2 if we also released the
  * whole transaction.
+ * 
+ * 试着从事务中释放一个checkpointed buffer。
+ * 如果释放了，返回1，如果释放了整个事务，返回2。
  *
  * Requires j_list_lock
  */
@@ -330,6 +350,7 @@ static int __try_to_free_cp_buf(struct zjournal_head *jh)
 	int ret = 0;
 	struct buffer_head *bh = jh2bh(jh);
 
+	// 如果：没有事务 && 没有checkpoint && 没有锁 && 没有dirty && 没有write io error
 	if (jh->b_transaction == NULL && jh->b_cpcount == 0 && !buffer_locked(bh) &&
 	    !buffer_dirty(bh) && !buffer_write_io_error(bh)) {
 		JBUFFER_TRACE(jh, "remove from checkpoint list");
@@ -900,6 +921,8 @@ void zj_journal_destroy_checkpoint(zjournal_t *journal)
  * journal_remove_checkpoint: called after a buffer has been committed
  * to disk (either by being write-back flushed to disk, or being
  * committed to the log).
+ * 
+ * 在一个buffer被提交到磁盘（不管是通过write-back刷新到磁盘，还是通过已提交到log）之后调用
  *
  * We cannot safely clean a transaction out of the log until all of the
  * buffer updates committed in that transaction have safely been stored
@@ -908,11 +931,19 @@ void zj_journal_destroy_checkpoint(zjournal_t *journal)
  * lists until they have been rewritten, at which point this function is
  * called to remove the buffer from the existing transaction's
  * checkpoint lists.
+ * 
+ * 直到该事物中的所有buffer更新都被安全地存储到磁盘上，我们才能安全地从日志中清除一个事务。
+ * 为了实现这一点，一个事务中的所有buffer需要维护在事务的checkpoint列表中，直到它们被重写，
+ * 此时，该函数被调用，从现有事务的checkpoint列表中删除buffer。
  *
  * The function returns 1 if it frees the transaction, 0 otherwise.
  * The function can free jh and bh.
  *
  * This function is called with j_list_lock held.
+ * 
+ * 如果该函数释放了事务，则返回1，否则返回0。该函数可以释放jh和bh。
+ * 
+ * 该函数在持有j_list_lock的情况下被调用。
  */
 int __zj_journal_remove_checkpoint(struct zjournal_head *jh)
 {
@@ -927,7 +958,7 @@ int __zj_journal_remove_checkpoint(struct zjournal_head *jh)
 		JBUFFER_TRACE(jh, "not on transaction");
 		goto out;
 	}
-	journal = transaction->t_journal;
+	journal = transaction->t_journal;	// jh所在的checkpoint事务所在的journal
 
 	JBUFFER_TRACE(jh, "removing from transaction");
 	__buffer_unlink(jh);
@@ -945,6 +976,10 @@ int __zj_journal_remove_checkpoint(struct zjournal_head *jh)
 	 * buffer off a running or committing transaction's checkpoing list,
 	 * then even if the checkpoint list is empty, the transaction obviously
 	 * cannot be dropped!
+	 * 
+	 * 有一个特殊情况需要担心：如果我们刚刚从正在运行或提交事务（事务并非T-FINISHED，
+	 * zjournal这里多一个transaction->t_real_commit相关的）的checkpoing列表中
+	 * 拉出buffer，那么即使checkpoint列表为空，事务显然也不能被丢弃！
 	 *
 	 * The locking here around t_state is a bit sleazy.
 	 * See the comment at the end of zj_journal_commit_transaction().
@@ -958,7 +993,10 @@ int __zj_journal_remove_checkpoint(struct zjournal_head *jh)
 	spin_unlock(&transaction->t_mark_lock);
 
 	/* OK, that was the last buffer for the transaction: we can now
-	   safely remove this transaction from the log */
+	   safely remove this transaction from the log 
+	   
+	   好吧，这是事务的最后一个buffer：我们现在可以安全地从日志中删除该事务了
+	   */
 	stats = &transaction->t_chp_stats;
 	if (stats->cs_chp_time)
 		stats->cs_chp_time = zj_time_diff(stats->cs_chp_time,

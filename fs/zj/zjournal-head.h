@@ -31,7 +31,7 @@ struct zjournal_head {
 	 * [jbd_lock_bh_zjournal_head()]
 	 */
 	int b_jcount;
-    int b_cpcount;
+    int b_cpcount;	// 这个是z-journal新加的，用于记录checkpoint的引用计数？
     //int b_wcount;
 
     struct zj_journal_handle *modified_handle;

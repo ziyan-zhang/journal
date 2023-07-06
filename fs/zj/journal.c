@@ -1849,13 +1849,17 @@ out:
 // core와 tid에 해당하는 transaction을 찾아서 반환해준다.
 // running, committing, checkpointing 들 중 하나일 것이며
 // 그게 아니면 NULL이 반환된다.
+
+// 在journal[core]中找tid。从journal-core的committing, running, checkpoint_tx_tree里面依次找
+// 这将是running, committing, checkpointing之一。
+// 否则，返回NULL。
 ztransaction_t *zj_get_target_transaction(zjournal_t *journal, int core, tid_t tid)
 {
 	zjournal_t *target_journal;
 	ztransaction_t *target_transaction;
 	zjournal_t **journals = (zjournal_t **)journal->j_private_start;
 
-	target_journal = journals[core];
+	target_journal = journals[core];	// target_journal是core对应的日志
 
 	if (!target_journal)
 		return NULL;
@@ -1863,16 +1867,20 @@ ztransaction_t *zj_get_target_transaction(zjournal_t *journal, int core, tid_t t
 	read_lock(&target_journal->j_state_lock);
 	spin_lock(&target_journal->j_list_lock);
 
+	// 如果core-journal上的committing_transaction的tid和传入的tid相同
 	if (((target_transaction = 
 	      target_journal->j_committing_transaction) != NULL) &&
 	      target_transaction->t_tid == tid)
 		goto out;
 
+	// 如果core-journal上的running_transaction的tid和传入的tid相同
 	if ((target_transaction = 
 	     target_journal->j_running_transaction) != NULL &&
 	     target_transaction->t_tid == tid) 
 		goto out;
 
+	// core-journal的running和committing事务里面都没有传入的tid对应的事务，那就在core-journal的j_ckpt_事务树中找
+	// j_checkpoint_txtree是一个radix_tree_root，里面存放的是tid和ztransaction_t的映射？
 	target_transaction = radix_tree_lookup(&target_journal->j_checkpoint_txtree, tid);
 
 	if (!target_transaction)

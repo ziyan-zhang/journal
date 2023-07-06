@@ -1,5 +1,19 @@
 # Z-Journal
+## 我添加的注释：
+---
+* 印象中e2fsprog要在正常内核编译，然后在作者的内核使用。
+* zj.ko和ext4mj.ko模块需要在作者的内核上面安装，然后才能挂载zj盘。
 
+安装fs模块和挂载zj盘的脚本`run.sh`：
+```bash
+sudo insmod ./sdb_dir/zj.ko
+sudo insmod ./sdb_dir/ext4mj.ko
+sudo ./sdb_dir/mke2fs -t ext4 -J multi_journal -F -G 1 /dev/sdc
+sudo ./sdb_dir/tune2fs -o journal_data /dev/sdc
+sudo mount -t ext4mj /dev/sdc /home/zy/exe_dir
+```
+---
+## 以下是作者的readme：
 ---
 
 All added files comply with the license rules of the Linux kernel.

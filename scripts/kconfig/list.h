@@ -25,7 +25,7 @@ struct list_head {
 	struct list_head *next, *prev;
 };
 
-
+// 宏定义，用于初始化链表的头部节点，表示将链表的next和prev指针都指向自身
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
 #define LIST_HEAD(name) \

@@ -741,7 +741,7 @@ struct ztransaction_s
 	 */
 	atomic_t		t_handle_count;
 
-	unsigned int t_real_commit;
+	unsigned int t_real_commit;		// TODO: t_real_commit指的是什么呢？
 	unsigned int t_real_commit_state;
 	/*
 	 * This transaction is being forced and some process is
@@ -1736,6 +1736,7 @@ static inline int zj_check_mark_in_list(struct list_head *list, commit_entry_t *
     return 0;
 }
 
+// 查看core和tid的组合是否则list中
 static inline int zj_check_mark_value_in_list(struct list_head *list, int core, int tid)
 {
     commit_entry_t *check_mark;
