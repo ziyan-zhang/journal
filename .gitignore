@@ -125,3 +125,4 @@ all.config
 
 # linux被编译到该文件夹
 Linux_compiled
+play_ground/a.out

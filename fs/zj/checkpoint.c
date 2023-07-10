@@ -32,6 +32,10 @@
  * Unlink a buffer from a transaction checkpoint list.
  *
  * Called with j_list_lock held.
+ * 
+ * 从事务检查点列表中取消链接缓冲区
+ * 
+ * 在持有j_list_lock的情况下调用
  */
 static inline void __buffer_unlink_first(struct zjournal_head *jh)
 {
@@ -87,7 +91,8 @@ static inline void __buffer_relink_io(struct zjournal_head *jh)
 	transaction->t_checkpoint_io_list = jh;
 }
 
-// 收集依赖加上判断依赖是否要从列表中删除（如果已完成）
+// 应该是用在tx完成了，随后过滤一遍rel_tx，把依赖于tx的项删除？
+// ckck: 这样的话，会用很多次啊，以为依赖此tx的所有rel_tx都要捋一遍？
 static inline void __zj_mark_enqueue(ztransaction_t *transaction, 
 					ztransaction_t *rel_transaction, commit_mark_t *buf)
 {
@@ -106,6 +111,9 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 	spin_lock(&rel_transaction->t_mark_lock);
 	// 将rel_transaction的t_check_mark_list中的所有元素都加入到mark_list中
 	// 对应论文中的递归的依赖检查？这里是收集到所有递归的依赖？
+
+	// list_for_each_entry(pos, head, member),pos取到head每个节点，这些节点通过member属性链接
+	// 对应此处，tc取到rel_transaction->t_check_mark_list中的每个节点
 	list_for_each_entry(tc, &rel_transaction->t_check_mark_list, pos) {
 		commit_entry_t *new_mark;
 		index++;
@@ -123,6 +131,7 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 		return;
 	}
 
+	// tid和jid是当前transaction的core和tid
 	jid = transaction->t_journal->j_core_id;
 	tid = transaction->t_tid;
 
@@ -137,9 +146,10 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 		tc = tc_next;
 		tc_next = list_next_entry(tc, pos);	// 返回由tc->pos链接的下一个tc
 
+		// mark_core和mark_tid是tc的，tc是mark list的，是rel_transaction中的数据
 		mark_core = tc->core;
 		mark_tid = tc->tid;
-		// 如果是自己的标记，或者在事务的完成标记列表中，或者在事务的检查标记列表中
+		// 如果rel_tx的mark_core和mark_tid是当前tx的，或者在tx的完成或检查标记列表中
 		if ((tid == mark_tid && jid == mark_core) ||
 			zj_check_mark_value_in_list(&transaction->t_complete_mark_list, 
 						mark_core, mark_tid) ||
@@ -150,6 +160,9 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 			check_num--;
 		}
 	} while(&mark_list != &tc_next->pos);	// 直到链表自己追上自己，就是说遍历完了？
+
+	// 上面做的事情大概是过滤了一遍rel_tx，把已经完成的tx有关的依赖删除了，剩下的就是还没完成的依赖了
+
 
 	// temp list의 mark 들을 transaction의 check mark list로 이동
 	// 将临时列表中的标记移动到事务的检查标记列表中
@@ -163,6 +176,7 @@ static inline void __zj_mark_enqueue(ztransaction_t *transaction,
 	transaction->t_check_num += check_num;
 	if (transaction->t_check_num_max < transaction->t_check_num)
 		transaction->t_check_num_max = transaction->t_check_num;
+	// ckck: 这里收集的是最大的tx达到的check_sum，意义在于？
 	spin_unlock(&transaction->t_mark_lock);
 
 	return;

@@ -36,6 +36,8 @@ struct list_head {
  * @ptr:	the &struct list_head pointer.
  * @type:	the type of the struct this is embedded in.
  * @member:	the name of the list_head within the struct.
+ * 
+ * ptr是某type实例的member对象，返回该type实例
  */
 #define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)
@@ -45,6 +47,9 @@ struct list_head {
  * @pos:	the type * to use as a loop cursor.
  * @head:	the head for your list.
  * @member:	the name of the list_head within the struct.
+ * 
+ * head->next是链表首节点，pos指向第一个节点，pos->member.next指向第二个节点的member，以此类推
+ * pos取到的是遍历节点后的每个节点的地址：list_entry宏得到节点的实例
  */
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\

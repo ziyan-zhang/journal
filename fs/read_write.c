@@ -462,7 +462,7 @@ static ssize_t new_sync_write(struct file *filp, const char __user *buf, size_t 
 	struct iov_iter iter;
 	ssize_t ret;
 
-	init_sync_kiocb(&kiocb, filp);
+	init_sync_kiocb(&kiocb, filp);	// f11, f10就直接跳到return了
 	kiocb.ki_pos = *ppos;
 	iov_iter_init(&iter, WRITE, &iov, 1, len);
 
@@ -537,7 +537,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		return -EFAULT;
 
 	ret = rw_verify_area(WRITE, file, pos, count);
-	if (!ret) {
+	if (!ret) {		// 这里调试要用两次f11步入，不能f10步过
 		if (count > MAX_RW_COUNT)
 			count =  MAX_RW_COUNT;
 		file_start_write(file);
@@ -587,7 +587,7 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 	if (f.file) {
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_write(f.file, buf, count, &pos);
-		if (ret >= 0)
+		if (ret >= 0)	// 这个应该就是单纯的写完了然后改变下文件当前指针pos
 			file_pos_write(f.file, pos);
 		fdput_pos(f);
 	}

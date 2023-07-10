@@ -2301,7 +2301,9 @@ static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
 
 	down_read(&tty->termios_rwsem);
 
-	/* Write out any echoed characters that are still pending */
+	/* Write out any echoed characters that are still pending 
+	* 写回任何仍待处理的回显字符
+	*/
 	process_echoes(tty);
 
 	add_wait_queue(&tty->write_wait, &wait);
