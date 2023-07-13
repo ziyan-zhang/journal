@@ -529,6 +529,18 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 {
 	ssize_t ret;
 
+
+	// 打印file->f_path->dentry->d_name
+	// 给下面的打印加上条件：表达式值不为ttyS0
+	// if (strcmp(file->f_path.dentry->d_name.name, "ttyS0") != 0) {
+	// 	printk("我的vfs_write: %s\n", file->f_path.dentry->d_name.name);		
+	// }
+
+	// 如果file->f_path.dentry->d_name.name是example.txt，让程序停在此处
+	if (strcmp(file->f_path.dentry->d_name.name, "example.txt") == 0) {
+		printk("我的vfs_write: %s\n", file->f_path.dentry->d_name.name);		
+	}
+
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
 	if (!(file->f_mode & FMODE_CAN_WRITE))
@@ -584,7 +596,7 @@ SYSCALL_DEFINE3(write, unsigned int, fd, const char __user *, buf,
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
 
-	if (f.file) {
+	if (f.file) {	// 为了保险，连点两下f11吧（其实应该f10+f11即可）
 		loff_t pos = file_pos_read(f.file);
 		ret = vfs_write(f.file, buf, count, &pos);
 		if (ret >= 0)	// 这个应该就是单纯的写完了然后改变下文件当前指针pos
