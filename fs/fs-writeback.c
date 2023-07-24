@@ -184,6 +184,8 @@ static void finish_writeback_work(struct bdi_writeback *wb,
 		wake_up_all(&wb->bdi->wb_waitq);
 }
 
+// 将回写工作添加到回写队列中，以确保脏数据能够及时地从内存回写到存储设备。
+// 这对于保证文件系统数据的一致性和持久性非常重要
 static void wb_queue_work(struct bdi_writeback *wb,
 			  struct wb_writeback_work *work)
 {
@@ -1818,6 +1820,8 @@ static struct wb_writeback_work *get_next_work_item(struct bdi_writeback *wb)
 /*
  * Add in the number of potentially dirty inodes, because each inode
  * write can dirty pagecache in the underlying blockdev.
+ * 
+ * （在nr_dirty_pages中需要）添加潜在脏inode的数量，因为每个inode写入都可以弄脏底层块设备中的页缓存。
  */
 static unsigned long get_nr_dirty_pages(void)
 {
@@ -1950,6 +1954,8 @@ void wb_workfn(struct work_struct *work)
 /*
  * Start writeback of `nr_pages' pages.  If `nr_pages' is zero, write back
  * the whole world.
+ * 
+ * 开始回写nr_pages页的数据。如果nr_pages为0，则回写整个世界。
  */
 void wakeup_flusher_threads(long nr_pages, enum wb_reason reason)
 {
@@ -1957,6 +1963,7 @@ void wakeup_flusher_threads(long nr_pages, enum wb_reason reason)
 
 	/*
 	 * If we are expecting writeback progress we must submit plugged IO.
+	 * 如果我们期望回写进度，我们必须提交插入的IO。
 	 */
 	if (blk_needs_flush_plug(current))
 		blk_schedule_flush_plug(current);
@@ -2384,6 +2391,8 @@ EXPORT_SYMBOL(try_to_writeback_inodes_sb);
  *
  * This function writes and waits on any dirty inode belonging to this
  * super_block.
+ * 
+ * 该函数写入并等待属于该超级块的任何脏inode。
  */
 void sync_inodes_sb(struct super_block *sb)
 {

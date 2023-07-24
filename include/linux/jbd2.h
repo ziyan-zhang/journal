@@ -422,6 +422,8 @@ static inline void jbd_unlock_bh_journal_head(struct buffer_head *bh)
 /**
  * struct jbd_inode - The jbd_inode type is the structure linking inodes in
  * ordered mode present in a transaction so that we can sync them during commit.
+ * 
+ * jbd_inode类型是在一个事务中以有序模式链接inode的结构，这样我们就可以在提交时同步它们。
  */
 struct jbd2_inode {
 	/**
@@ -429,6 +431,8 @@ struct jbd2_inode {
 	 *
 	 * Which transaction does this inode belong to? Either the running
 	 * transaction or the committing one. [j_list_lock]
+	 * 
+	 * 此inode属于哪个事务？运行事务或提交事务。
 	 */
 	transaction_t *i_transaction;
 
@@ -437,11 +441,15 @@ struct jbd2_inode {
 	 *
 	 * Pointer to the running transaction modifying inode's data in case
 	 * there is already a committing transaction touching it. [j_list_lock]
+	 * 
+	 * 指向正在修改inode数据的运行事务的指针，如果已经有提交事务接触它。
 	 */
 	transaction_t *i_next_transaction;
 
 	/**
 	 * @i_list: List of inodes in the i_transaction [j_list_lock]
+	 * 
+	 * i_transaction中inode的列表
 	 */
 	struct list_head i_list;
 
@@ -587,6 +595,8 @@ struct transaction_s
 
 	/*
 	 * Where in the log does this transaction's commit start? [no locking]
+	 *
+	 * 这个事务的提交从log的什么地方开始？
 	 */
 	unsigned long		t_log_start;
 
@@ -596,12 +606,16 @@ struct transaction_s
 	/*
 	 * Doubly-linked circular list of all buffers reserved but not yet
 	 * modified by this transaction [j_list_lock]
+	 * 
+	 * 所有保留但尚未由此事务修改的缓冲区的双向循环链表
 	 */
 	struct journal_head	*t_reserved_list;
 
 	/*
 	 * Doubly-linked circular list of all metadata buffers owned by this
 	 * transaction [j_list_lock]
+	 * 
+	 * 此事务拥有的所有元数据缓冲区的双向循环链表
 	 */
 	struct journal_head	*t_buffers;
 
@@ -609,18 +623,24 @@ struct transaction_s
 	 * Doubly-linked circular list of all forget buffers (superseded
 	 * buffers which we can un-checkpoint once this transaction commits)
 	 * [j_list_lock]
+	 * 
+	 * 所有忘记缓冲区（一旦此事务提交，我们就可以取消检查点的过时缓冲区）的双向循环链表
 	 */
 	struct journal_head	*t_forget;
 
 	/*
 	 * Doubly-linked circular list of all buffers still to be flushed before
 	 * this transaction can be checkpointed. [j_list_lock]
+	 * 
+	 * 在此事务可以检查点之前，所有仍然需要刷新的缓冲区的双向循环链表
 	 */
 	struct journal_head	*t_checkpoint_list;
 
 	/*
 	 * Doubly-linked circular list of all buffers submitted for IO while
 	 * checkpointing. [j_list_lock]
+	 * 
+	 * 检查点时提交给IO的所有缓冲区的双向循环链表
 	 */
 	struct journal_head	*t_checkpoint_io_list;
 
@@ -628,22 +648,30 @@ struct transaction_s
 	 * Doubly-linked circular list of metadata buffers being shadowed by log
 	 * IO.  The IO buffers on the iobuf list and the shadow buffers on this
 	 * list match each other one for one at all times. [j_list_lock]
+	 * 
+	 * 被日志IO阴影的元数据缓冲区的双向循环链表。iobuf列表上的IO缓冲区和此列表上的阴影缓冲区始终一一匹配。
 	 */
+	// ckck: 这个阴影缓冲区的作用是？
 	struct journal_head	*t_shadow_list;
 
 	/*
 	 * List of inodes whose data we've modified in data=ordered mode.
 	 * [j_list_lock]
+	 * 
+	 * 我们在data = ordered模式下修改的inode的列表。
 	 */
 	struct list_head	t_inode_list;
 
 	/*
 	 * Protects info related to handles
+	 * 保护（journal)handle相关的信息
 	 */
 	spinlock_t		t_handle_lock;
 
 	/*
 	 * Longest time some handle had to wait for running transaction
+	 *
+	 * 某些句柄必须等待运行事务的最长时间
 	 */
 	unsigned long		t_max_wait;
 
@@ -665,18 +693,24 @@ struct transaction_s
 	/*
 	 * Number of outstanding updates running on this transaction
 	 * [t_handle_lock]
+	 * 
+	 * 此事务上运行的未完成更新的数量
 	 */
 	atomic_t		t_updates;
 
 	/*
 	 * Number of buffers reserved for use by all handles in this transaction
 	 * handle but not yet modified. [t_handle_lock]
+	 * 
+	 * 保留供此事务中所有句柄使用但尚未修改的缓冲区的数量
 	 */
 	atomic_t		t_outstanding_credits;
 
 	/*
 	 * Forward and backward links for the circular list of all transactions
 	 * awaiting checkpoint. [j_list_lock]
+	 * 
+	 * 所有等待检查点的事务的循环链表的前向和后向链接
 	 */
 	transaction_t		*t_cpnext, *t_cpprev;
 
@@ -703,11 +737,14 @@ struct transaction_s
 	unsigned int t_synchronous_commit:1;
 
 	/* Disk flush needs to be sent to fs partition [no locking] */
+	/* 磁盘flush需要被发送到fs分区（的标志？） */
 	int			t_need_data_flush;
 
 	/*
 	 * For use by the filesystem to store fs-specific data
 	 * structures associated with the transaction
+	 * 
+	 * 供文件系统使用，用于存储与事务相关的特定于fs的数据结构
 	 */
 	struct list_head	t_private_list;
 };
@@ -750,6 +787,7 @@ struct journal_s
 {
 	/**
 	 * @j_flags: General journaling state flags [j_state_lock]
+	 * 通用的journaling状态标志
 	 */
 	unsigned long		j_flags;
 
@@ -758,6 +796,8 @@ struct journal_s
 	 *
 	 * Is there an outstanding uncleared error on the journal (from a prior
 	 * abort)? [j_state_lock]
+	 * 
+	 * journal中是否有未解除的错误（来自先前的中止）？
 	 */
 	int			j_errno;
 
@@ -778,6 +818,7 @@ struct journal_s
 
 	/**
 	 * @j_state_lock: Protect the various scalars in the journal.
+	 * 保护journal中的各种标量
 	 */
 	rwlock_t		j_state_lock;
 
@@ -785,6 +826,8 @@ struct journal_s
 	 * @j_barrier_count:
 	 *
 	 * Number of processes waiting to create a barrier lock [j_state_lock]
+	 * 
+	 * 等待创建barrier锁的进程数
 	 */
 	int			j_barrier_count;
 
@@ -822,21 +865,30 @@ struct journal_s
 	 *
 	 * Wait queue for waiting for a locked transaction to start committing,
 	 * or for a barrier lock to be released.
+	 * 
+	 * 等待队列，等待锁定的事务开始提交，或等待barrier锁被释放。
 	 */
 	wait_queue_head_t	j_wait_transaction_locked;
+	// TODO: 这个是什么队列？
 
 	/**
 	 * @j_wait_done_commit: Wait queue for waiting for commit to complete.
+	 * 
+	 * 等待队列，等待提交完成。
 	 */
 	wait_queue_head_t	j_wait_done_commit;
 
 	/**
 	 * @j_wait_commit: Wait queue to trigger commit.
+	 * 
+	 * 等待队列，触发提交。
 	 */
 	wait_queue_head_t	j_wait_commit;
 
 	/**
 	 * @j_wait_updates: Wait queue to wait for updates to complete.
+	 * 
+	 * 等待队列，等待更新完成。
 	 */
 	wait_queue_head_t	j_wait_updates;
 
@@ -844,6 +896,8 @@ struct journal_s
 	 * @j_wait_reserved:
 	 *
 	 * Wait queue to wait for reserved buffer credits to drop.
+	 * 
+	 * 等待队列，等待保留的缓冲区信用降低。
 	 */
 	wait_queue_head_t	j_wait_reserved;
 
@@ -851,6 +905,8 @@ struct journal_s
 	 * @j_checkpoint_mutex:
 	 *
 	 * Semaphore for locking against concurrent checkpoints.
+	 * 
+	 * 用于防止并发检查点的信号量。
 	 */
 	struct mutex		j_checkpoint_mutex;
 
@@ -861,6 +917,9 @@ struct journal_s
 	 * was moved from jbd2_log_do_checkpoint() to reduce stack
 	 * usage.  Access to this array is controlled by the
 	 * @j_checkpoint_mutex.  [j_checkpoint_mutex]
+	 * 
+	 * 检查点例程使用的buffer head列表。这是从jbd2_log_do_checkpoint（）移动的，以减少堆栈使用。
+	 * 对此数组的访问由@j_checkpoint_mutex控制。
 	 */
 	struct buffer_head	*j_chkpt_bhs[JBD2_NR_BATCH];
 
@@ -869,6 +928,8 @@ struct journal_s
 	 *
 	 * Journal head: identifies the first unused block in the journal.
 	 * [j_state_lock]
+	 * 
+	 * journal head：标识journal中第一个未使用的块。
 	 */
 	unsigned long		j_head;
 
@@ -877,6 +938,8 @@ struct journal_s
 	 *
 	 * Journal tail: identifies the oldest still-used block in the journal.
 	 * [j_state_lock]
+	 * 
+	 * journal_tail：标识journal中最旧的仍在使用的块。
 	 */
 	unsigned long		j_tail;
 
@@ -885,6 +948,8 @@ struct journal_s
 	 *
 	 * Journal free: how many free blocks are there in the journal?
 	 * [j_state_lock]
+	 * 
+	 * journal_free：journal中有多少空闲块？
 	 */
 	unsigned long		j_free;
 
@@ -893,6 +958,8 @@ struct journal_s
 	 *
 	 * The block number of the first usable block in the journal
 	 * [j_state_lock].
+	 * 
+	 * journal中第一个可用块的块号
 	 */
 	unsigned long		j_first;
 
@@ -901,6 +968,8 @@ struct journal_s
 	 *
 	 * The block number one beyond the last usable block in the journal
 	 * [j_state_lock].
+	 * 
+	 * journal中最后一个可用块之后的第一个块
 	 */
 	unsigned long		j_last;
 
@@ -911,6 +980,8 @@ struct journal_s
 
 	/**
 	 * @j_blocksize: Block size for the location where we store the journal.
+	 * 
+	 * 我们存储日志的位置的块大小
 	 */
 	int			j_blocksize;
 
@@ -918,6 +989,8 @@ struct journal_s
 	 * @j_blk_offset:
 	 *
 	 * Starting block offset into the device where we store the journal.
+	 * 
+	 * （journal在）我们存储journal的设备上的起始块偏移量
 	 */
 	unsigned long long	j_blk_offset;
 
@@ -931,11 +1004,15 @@ struct journal_s
 	 *
 	 * Device which holds the client fs.  For internal journal this will be
 	 * equal to j_dev.
+	 * 
+	 * 保存客户端fs的设备。对于内部日志，这将等于j_dev。
 	 */
 	struct block_device	*j_fs_dev;
 
 	/**
 	 * @j_maxlen: Total maximum capacity of the journal region on disk.
+	 * 
+	 * 磁盘上journal区域的总最大容量
 	 */
 	unsigned int		j_maxlen;
 
@@ -943,11 +1020,15 @@ struct journal_s
 	 * @j_reserved_credits:
 	 *
 	 * Number of buffers reserved from the running transaction.
+	 * 
+	 * 从运行事务中保留的缓冲区的数量
 	 */
 	atomic_t		j_reserved_credits;
 
 	/**
 	 * @j_list_lock: Protects the buffer lists and internal buffer state.
+	 * 
+	 * 保护缓冲区列表和内部缓冲区状态
 	 */
 	spinlock_t		j_list_lock;
 
@@ -956,6 +1037,8 @@ struct journal_s
 	 *
 	 * Optional inode where we store the journal.  If present, all
 	 * journal block numbers are mapped into this inode via bmap().
+	 * 
+	 * 可选的inode，我们在其中存储journal。如果存在，则通过bmap（）将所有journal块号映射到此inode中。
 	 */
 	struct inode		*j_inode;
 
@@ -963,6 +1046,8 @@ struct journal_s
 	 * @j_tail_sequence:
 	 *
 	 * Sequence number of the oldest transaction in the log [j_state_lock]
+	 * 
+	 * log中最旧事务的序列号
 	 */
 	tid_t			j_tail_sequence;
 
@@ -970,6 +1055,8 @@ struct journal_s
 	 * @j_transaction_sequence:
 	 *
 	 * Sequence number of the next transaction to grant [j_state_lock]
+	 * 
+	 * 下一个要准予的事务的序列号
 	 */
 	tid_t			j_transaction_sequence;
 
@@ -978,6 +1065,8 @@ struct journal_s
 	 *
 	 * Sequence number of the most recently committed transaction
 	 * [j_state_lock].
+	 * 
+	 * 最近已提交的事务的序列号
 	 */
 	tid_t			j_commit_sequence;
 
@@ -986,6 +1075,8 @@ struct journal_s
 	 *
 	 * Sequence number of the most recent transaction wanting commit
 	 * [j_state_lock]
+	 * 
+	 * 最近想要提交的事务的序列号
 	 */
 	tid_t			j_commit_request;
 
@@ -996,11 +1087,15 @@ struct journal_s
 	 * backed by this journal.  This will eventually be replaced by an array
 	 * of uuids, allowing us to index multiple devices within a single
 	 * journal and to perform atomic updates across them.
+	 * 
+	 * journal uuid：标识由此journal支持的对象（文件系统，LVM卷等）。
 	 */
 	__u8			j_uuid[16];
 
 	/**
 	 * @j_task: Pointer to the current commit thread for this journal.
+	 * 
+	 * 指向此journal的当前提交线程的指针
 	 */
 	struct task_struct	*j_task;
 
@@ -1009,6 +1104,8 @@ struct journal_s
 	 *
 	 * Maximum number of metadata buffers to allow in a single compound
 	 * commit transaction.
+	 * 
+	 * 允许在单个复合提交事务中的最大元数据缓冲区数
 	 */
 	int			j_max_transaction_buffers;
 
@@ -1016,16 +1113,22 @@ struct journal_s
 	 * @j_commit_interval:
 	 *
 	 * What is the maximum transaction lifetime before we begin a commit?
+	 * 
+	 * 在我们开始提交之前，事务的最大生命周期是多少？
 	 */
 	unsigned long		j_commit_interval;
 
 	/**
 	 * @j_commit_timer: The timer used to wakeup the commit thread.
+	 * 
+	 * 用于唤醒提交线程的计时器
 	 */
 	struct timer_list	j_commit_timer;
 
 	/**
 	 * @j_revoke_lock: Protect the revoke table.
+	 * 
+	 * 保护撤销表
 	 */
 	spinlock_t		j_revoke_lock;
 
@@ -1034,16 +1137,22 @@ struct journal_s
 	 *
 	 * The revoke table - maintains the list of revoked blocks in the
 	 * current transaction.
+	 * 
+	 * 撤销表-维护当前事务中撤销的块的列表
 	 */
 	struct jbd2_revoke_table_s *j_revoke;
 
 	/**
 	 * @j_revoke_table: Alternate revoke tables for j_revoke.
+	 * 
+	 * j_revoke的备用撤销表
 	 */
 	struct jbd2_revoke_table_s *j_revoke_table[2];
 
 	/**
 	 * @j_wbuf: Array of bhs for jbd2_journal_commit_transaction.
+	 * 
+	 * jbd2_journal_commit_transaction(提交事务到日志的主要函数)的 buffer_head 数组
 	 */
 	struct buffer_head	**j_wbuf;
 
@@ -1051,6 +1160,8 @@ struct journal_s
 	 * @j_wbufsize:
 	 *
 	 * Size of @j_wbuf array.
+	 * 
+	 * j_wbuf数组的大小
 	 */
 	int			j_wbufsize;
 
@@ -1059,6 +1170,8 @@ struct journal_s
 	 *
 	 * The pid of the last person to run a synchronous operation
 	 * through the journal.
+	 * 
+	 * 最后一个通过journal运行同步操作的人的pid
 	 */
 	pid_t			j_last_sync_writer;
 
@@ -1067,6 +1180,8 @@ struct journal_s
 	 *
 	 * The average amount of time in nanoseconds it takes to commit a
 	 * transaction to disk. [j_state_lock]
+	 * 
+	 * 将事务提交到磁盘所需的平均时间（以纳秒为单位）
 	 */
 	u64			j_average_commit_time;
 
@@ -1075,6 +1190,8 @@ struct journal_s
 	 *
 	 * Minimum time that we should wait for additional filesystem operations
 	 * to get batched into a synchronous handle in microseconds.
+	 * 
+	 * 我们等待其他文件系统操作批量进入同步句柄的最短时间（以微秒为单位）
 	 */
 	u32			j_min_batch_time;
 
@@ -1083,6 +1200,8 @@ struct journal_s
 	 *
 	 * Maximum time that we should wait for additional filesystem operations
 	 * to get batched into a synchronous handle in microseconds.
+	 * 
+	 * 我们等待其他文件系统操作批量进入同步句柄的最长时间（以微秒为单位）
 	 */
 	u32			j_max_batch_time;
 
@@ -1090,6 +1209,8 @@ struct journal_s
 	 * @j_commit_callback:
 	 *
 	 * This function is called when a transaction is closed.
+	 * 
+	 * 当事务关闭时调用此函数
 	 */
 	void			(*j_commit_callback)(journal_t *,
 						     transaction_t *);
@@ -1150,7 +1271,12 @@ struct journal_s
 	 * where the running transaction has to wait for all handles to be
 	 * dropped to commit that transaction and also acquiring a handle may
 	 * require transaction commit to finish.
+	 * 
+	 * Lockdep实体用于跟踪事务提交依赖项。当我们等待提交时，句柄保持此“锁”进行读取，
+	 * 我们会获取此“锁”进行写入。这与jbd2日志记录的属性相匹配，其中运行事务必须等待所有句柄被删除以提交该事务，
+	 * 并且获取句柄可能需要事务提交完成。
 	 */
+	// ckck: 这个依赖指什么？跟zjournal的依赖一样吗？
 	struct lockdep_map	j_trans_commit_map;
 #endif
 };
@@ -1251,9 +1377,10 @@ extern void __jbd2_journal_file_buffer(struct journal_head *, transaction_t *, i
 extern void __journal_free_buffer(struct journal_head *bh);
 extern void jbd2_journal_file_buffer(struct journal_head *, transaction_t *, int);
 extern void __journal_clean_data_list(transaction_t *transaction);
+// 将bh->associated_buffers插入到指定的head前面
 static inline void jbd2_file_log_bh(struct list_head *head, struct buffer_head *bh)
 {
-	list_add_tail(&bh->b_assoc_buffers, head);
+	list_add_tail(&bh->b_assoc_buffers, head);	// 将一个新条目bh->b_assoc_buffers插入到指定的head的前面
 }
 static inline void jbd2_unfile_log_bh(struct buffer_head *bh)
 {
@@ -1512,7 +1639,10 @@ static inline void jbd2_journal_abort_handle(handle_t *handle)
 #endif /* __KERNEL__   */
 
 /* Comparison functions for transaction IDs: perform comparisons using
- * modulo arithmetic so that they work over sequence number wraps. */
+ * modulo arithmetic so that they work over sequence number wraps. 
+ *
+ * 如果 x > y ，返回真
+ */
 
 static inline int tid_gt(tid_t x, tid_t y)
 {

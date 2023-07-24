@@ -2123,6 +2123,9 @@ generic_make_request_checks(struct bio *bio)
 	 * allocation ends up trading a lot of pain for a small amount of
 	 * memory.  Just allocate it upfront.  This may fail and block
 	 * layer knows how to live with it.
+	 * 
+	 * 多种块部件想要%current->io_context，并且延迟的ioc分配最终会交换大量的痛苦以换取少量的内存。
+	 * 只需提前分配即可。 这可能会失败，块层知道如何处理它。
 	 */
 	create_io_context(GFP_ATOMIC, q->node);
 
@@ -2158,6 +2161,15 @@ end_io:
  * success/failure status of the request, along with notification of
  * completion, is delivered asynchronously through the bio->bi_end_io
  * function described (one day) else where.
+ * 
+ * generic_make_request - 将缓冲区交给其设备驱动程序以进行I/O
+ * 确认bio的合法性之后将其加入队列中
+ * @bio：描述内存中和设备上的位置的bio。
+ * 
+ * generic_make_request（）用于对块设备进行I/O请求。 它传递一个&struct bio，该结构描述了需要执行的I/O。
+ * 
+ * generic_make_request（）不返回任何状态。 请求的成功/失败状态以及完成的通知通过bio->bi_end_io函数异步传递，
+ * 该函数在其他地方描述（有一天）。
  *
  * The caller of generic_make_request must make sure that bi_io_vec
  * are set to describe the memory buffer, and that bi_dev and bi_sector are
@@ -2169,6 +2181,15 @@ end_io:
  * bio happens to be merged with someone else, and may resubmit the bio to
  * a lower device by calling into generic_make_request recursively, which
  * means the bio should NOT be touched after the call to ->make_request_fn.
+ * 
+ * generic_make_request的调用者必须确保以下几个功能已设置：
+ * 1、bi_io_vec用于描述内存缓冲区，
+ * 2、bi_dev和bi_sector用于描述设备地址，
+ * 3、bi_end_io和可选的bi_private（可选）用于描述如何发出完成通知。
+ * 
+ * generic_make_request及其调用的驱动程序可以使用bi_next（如果此bio碰巧与其他人合并），
+ * 并且可以通过递归调用generic_make_request将bio重新提交给较低的设备，
+ * 这意味着在调用->make_request_fn之后不应该触摸该bio。
  */
 blk_qc_t generic_make_request(struct bio *bio)
 {
@@ -2178,11 +2199,14 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 * bio_list_on_stack[1] contains bios that were submitted before
 	 * the current make_request_fn, but that haven't been processed
 	 * yet.
+	 * 
+	 * bio_list_on_stack[0]包含由当前make_request_fn提交的bios。
+	 * bio_list_on_stack[1]包含在当前make_request_fn之前提交、但尚未被处理的bios。
 	 */
 	struct bio_list bio_list_on_stack[2];
 	blk_qc_t ret = BLK_QC_T_NONE;
 
-	if (!generic_make_request_checks(bio))
+	if (!generic_make_request_checks(bio))	/*1. 检查bio->bi_sector没有超过块设备的扇区数*/
 		goto out;
 
 	/*
@@ -2194,6 +2218,12 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 * task or not.  If it is NULL, then no make_request is active.  If
 	 * it is non-NULL, then a make_request is active, and new requests
 	 * should be added at the tail
+	 * 
+	 * 我们一次只想要一个->make_request_fn处于活动状态，否则使用堆叠设备的堆栈使用可能会有问题。
+	 * 因此，使用current->bio_list来保留由make_request_fn函数提交的请求列表。
+	 * current->bio_list也用作标志，以指示generic_make_request当前是否在此任务中处于活动状态。
+	 * 如果为NULL，则没有make_request处于活动状态；
+	 * 如果它不为NULL，则make_request处于活动状态，并且应将新请求添加到尾部。
 	 */
 	if (current->bio_list) {
 		bio_list_add(&current->bio_list[0], bio);
@@ -2213,12 +2243,20 @@ blk_qc_t generic_make_request(struct bio *bio)
 	 * from the top.  In this case we really did just take the bio
 	 * of the top of the list (no pretending) and so remove it from
 	 * bio_list, and call into ->make_request() again.
+	 * 
+	 * 以下循环可能有点不明显，因此值得一些解释。
+	 * 进入循环之前，bio->bi_next为NULL（因为所有调用者都确保了这一点），因此我们有一个包含单个bio的列表。
+	 * 我们假装我们刚刚从更长的列表中取出它，因此我们将bio_list分配给指向bio_list_on_stack的指针，
+	 * 从而初始化要添加的新bios的bio_list。
+	 * ->make_request（）确实可以通过对generic_make_request的递归调用来添加更多的bios。
+	 * 如果是这样，我们会在bio_list中找到一个非NULL值，并从顶部重新进入循环。在这种情况下，
+	 * 我们确实只是从列表顶部取出了bio（没有假装），因此将其从bio_list中删除，并再次调用->make_request（）。
 	 */
 	BUG_ON(bio->bi_next);
 	bio_list_init(&bio_list_on_stack[0]);
 	current->bio_list = bio_list_on_stack;
 	do {
-		struct request_queue *q = bio->bi_disk->queue;
+		struct request_queue *q = bio->bi_disk->queue;	/*2. 获取与块设备相关的请求队列q*/
 
 		if (likely(blk_queue_enter(q, bio->bi_opf & REQ_NOWAIT) == 0)) {
 			struct bio_list lower, same;
@@ -2226,7 +2264,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 			/* Create a fresh bio_list for all subordinate requests */
 			bio_list_on_stack[1] = bio_list_on_stack[0];
 			bio_list_init(&bio_list_on_stack[0]);
-			ret = q->make_request_fn(q, bio);
+			ret = q->make_request_fn(q, bio);	/*5.调用q->make_request_fn方法将bio请求插入请求队列q中*/
 
 			blk_queue_exit(q);
 
@@ -2256,7 +2294,7 @@ blk_qc_t generic_make_request(struct bio *bio)
 	current->bio_list = NULL; /* deactivate */
 
 out:
-	return ret;
+	return ret;	/*6. 返回*/
 }
 EXPORT_SYMBOL(generic_make_request);
 

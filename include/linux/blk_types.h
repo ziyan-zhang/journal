@@ -51,6 +51,8 @@ struct blk_issue_stat {
 /*
  * main unit of I/O for the block layer and lower layers (ie drivers and
  * stacking drivers)
+ * 
+ * 块层和下层IO的主要单元（即驱动程序和堆叠驱动程序）
  */
 struct bio {
 	struct bio		*bi_next;	/* request queue link */
@@ -67,6 +69,8 @@ struct bio {
 
 	/* Number of segments in this BIO after
 	 * physical address coalescing is performed.
+	 *
+	 * 在执行物理地址合并后，此BIO中的段数。
 	 */
 	unsigned int		bi_phys_segments;
 
@@ -119,6 +123,9 @@ struct bio {
 	 * We can inline a number of vecs at the end of the bio, to avoid
 	 * double allocations for a small number of bio_vecs. This member
 	 * MUST obviously be kept at the very end of the bio.
+	 * 
+	 * 我们可以在bio的末尾内联一些vecs，以避免为少量的bio_vecs进行双重分配。
+	 * 这个成员显然必须保持在bio的很末尾。
 	 */
 	struct bio_vec		bi_inline_vecs[0];
 };

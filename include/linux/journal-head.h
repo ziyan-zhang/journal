@@ -55,6 +55,8 @@ struct journal_head {
 	 * Pointer to a saved copy of the buffer containing no uncommitted
 	 * deallocation references, so that allocations can avoid overwriting
 	 * uncommitted deletes. [jbd_lock_bh_state()]
+	 * 
+	 * 指向缓冲区的已保存副本的指针，该副本不包含未提交的释放引用，因此分配可以避免覆盖未提交的删除。
 	 */
 	char *b_committed_data;
 

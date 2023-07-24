@@ -99,6 +99,8 @@ static inline void __list_add(struct list_head *_new,
  * @new: new entry to be added
  * @head: list head to add it before
  *
+ * 将一个新条目插入到指定head的前面
+ * 
  * Insert a new entry before the specified head.
  * This is useful for implementing queues.
  */

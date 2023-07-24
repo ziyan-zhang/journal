@@ -68,6 +68,8 @@ enum wb_reason {
  * A control structure which tells the writeback code what to do.  These are
  * always on the stack, and hence need no locking.  They are always initialised
  * in a manner such that unspecified fields are set to zero.
+ * 
+ * 一个控制结构，它告诉写回代码要做什么。 这些总是在堆栈上，因此不需要锁定。 它们总是以这样的方式初始化，即未指定的字段设置为零。
  */
 struct writeback_control {
 	long nr_to_write;		/* Write this many pages, and decrement
@@ -269,6 +271,8 @@ static inline void wbc_attach_fdatawrite_inode(struct writeback_control *wbc,
  * @bio is a part of the writeback in progress controlled by @wbc.  Perform
  * writeback specific initialization.  This is used to apply the cgroup
  * writeback context.
+ * 
+ * 用于应用cgroup写回上下文。
  */
 static inline void wbc_init_bio(struct writeback_control *wbc, struct bio *bio)
 {

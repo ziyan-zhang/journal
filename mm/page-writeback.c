@@ -2150,6 +2150,16 @@ EXPORT_SYMBOL(tag_pages_for_writeback);
  * not miss some pages (e.g., because some other process has cleared TOWRITE
  * tag we set). The rule we follow is that TOWRITE tag can be cleared only
  * by the process clearing the DIRTY tag (and submitting the page for IO).
+ * 
+ * 遍历给定地址空间的脏页面列表并写入所有页面。
+ * 
+ * 如果一个页面已经在I/O下，write_cache_pages()跳过它，即使它是脏的。这是内存清理写回的理想行为，
+ * 但是对于数据完整性系统调用（如fsync()）是不正确的。fsync()和msync()需要保证在调用时所有脏数据都会得到新的I/O开始。
+ * 如果wbc->sync_mode是WB_SYNC_ALL，那么我们是为了数据完整性而调用的，我们必须等待现有的IO完成。
+ * 
+ * 为了避免活锁（当其他进程脏了新页面时），我们首先用TOWRITE标记应该写回的页面，然后才开始写它们。
+ * 对于数据完整性同步，我们必须小心，以免错过一些页面（例如，因为其他进程已经清除了我们设置的TOWRITE标记）。
+ * 我们遵循的规则是，TOWRITE标记只能由清除DIRTY标记（并提交页面进行IO）的进程清除。
  */
 int write_cache_pages(struct address_space *mapping,
 		      struct writeback_control *wbc, writepage_t writepage,
@@ -2208,6 +2218,10 @@ retry:
 			 * even swizzled back from swapper_space to tmpfs file
 			 * mapping. However, page->index will not change
 			 * because we have a reference on the page.
+			 * 
+			 * 此时，页面可能被截断或无效（将page->mapping更改为NULL），
+			 * 甚至从swapper_space转换回tmpfs文件映射。
+			 * 但是，page->index不会改变，因为我们对页面有一个引用。
 			 */
 			if (page->index > end) {
 				/*
@@ -2229,6 +2243,10 @@ retry:
 			 * real expectation of this data interity operation
 			 * even if there is now a new, dirty page at the same
 			 * pagecache address.
+			 * 
+			 * 页面被截断或无效。我们可以自由地跳过它，即使是为了数据完整性操作：
+			 * 该页面已经同时消失，因此即使现在在相同的页面缓存地址上有一个新的脏页面，
+			 * 也不会有对此数据完整性操作的真正期望。
 			 */
 			if (unlikely(page->mapping != mapping)) {
 continue_unlock:
@@ -2243,7 +2261,7 @@ continue_unlock:
 
 			if (PageWriteback(page)) {
 				if (wbc->sync_mode != WB_SYNC_NONE)
-					wait_on_page_writeback(page);
+					wait_on_page_writeback(page);	// 等待给定页面的写回操作完成
 				else
 					goto continue_unlock;
 			}

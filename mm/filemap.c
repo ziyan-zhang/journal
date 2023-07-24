@@ -2961,6 +2961,8 @@ EXPORT_SYMBOL(generic_file_direct_write);
 /*
  * Find or create a page at the given pagecache position. Return the locked
  * page. This function is specifically for buffered writes.
+ * 
+ * 找到或创建给定页缓存位置的页。返回锁定的页。此函数专门用于缓冲写入。
  */
 struct page *grab_cache_page_write_begin(struct address_space *mapping,
 					pgoff_t index, unsigned flags)

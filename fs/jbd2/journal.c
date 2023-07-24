@@ -189,6 +189,16 @@ static void commit_timeout(unsigned long __data)
  *    of the data in that part of the log has been rewritten elsewhere on
  *    the disk.  Flushing these old buffers to reclaim space in the log is
  *    known as checkpointing, and this thread is responsible for that job.
+ * 
+ * kjournald2：用于管理logging设备journal的主线程函数。
+ * 
+ * 这个内核线程负责两件事：
+ * 
+ * 1）COMMIT：每隔一段时间，我们需要将当前的文件系统状态提交到磁盘上。
+ *   日志线程负责将所有的元数据缓冲区写入磁盘。
+ * 
+ * 2）CHECKPOINT：在重用日志文件的已使用部分之前，必须将该日志部分中的所有数据重写到磁盘的其他位置。
+ *  将这些旧缓冲区刷新以在日志中回收空间称为检查点，该线程负责该作业。
  */
 
 static int kjournald2(void *arg)
@@ -203,7 +213,7 @@ static int kjournald2(void *arg)
 	setup_timer(&journal->j_commit_timer, commit_timeout,
 			(unsigned long)current);
 
-	set_freezable();
+	set_freezable();	// 使线程可以安全地进入睡眠或休眠状态
 
 	/* Record that the journal thread is running */
 	journal->j_task = current;
@@ -214,6 +224,9 @@ static int kjournald2(void *arg)
 	 * recurse to the fs layer because we are responsible for the
 	 * transaction commit and any fs involvement might get stuck waiting for
 	 * the trasn. commit.
+	 * 
+	 * 确保来自此内核线程的任何分配都不会递归到fs层，因为我们负责事务提交，
+	 * 任何fs参与都可能被阻塞等待事务提交。
 	 */
 	memalloc_nofs_save();
 
@@ -222,6 +235,8 @@ static int kjournald2(void *arg)
 	 */
 	write_lock(&journal->j_state_lock);
 
+	// loop前做的是初始化的工作，启动系统的时候才需要，断点打在loop里
+
 loop:
 	if (journal->j_flags & JBD2_UNMOUNT)
 		goto end_loop;
@@ -229,7 +244,7 @@ loop:
 	jbd_debug(1, "commit_sequence=%d, commit_request=%d\n",
 		journal->j_commit_sequence, journal->j_commit_request);
 
-	if (journal->j_commit_sequence != journal->j_commit_request) {
+	if (journal->j_commit_sequence != journal->j_commit_request) {	// 一般是commit_sequence 比 commit_request 小1
 		jbd_debug(1, "OK, requests differ\n");
 		write_unlock(&journal->j_state_lock);
 		del_timer_sync(&journal->j_commit_timer);
@@ -238,12 +253,15 @@ loop:
 		goto loop;
 	}
 
+	// 看样子后面都是commit做完之后的事情了
 	wake_up(&journal->j_wait_done_commit);
 	if (freezing(current)) {
 		/*
 		 * The simpler the better. Flushing journal isn't a
 		 * good idea, because that depends on threads that may
 		 * be already stopped.
+		 * 
+		 * 简单就是美。刷新日志不是一个好主意，因为这取决于可能已经停止的线程。
 		 */
 		jbd_debug(1, "Now suspending kjournald2\n");
 		write_unlock(&journal->j_state_lock);
@@ -253,6 +271,8 @@ loop:
 		/*
 		 * We assume on resume that commits are already there,
 		 * so we don't sleep
+		 * 
+		 * 我们假设在恢复时提交已经存在，所以我们不会睡觉
 		 */
 		DEFINE_WAIT(wait);
 		int should_sleep = 1;
@@ -329,6 +349,11 @@ static void journal_kill_thread(journal_t *journal)
  * Writes a metadata buffer to a given disk block.  The actual IO is not
  * performed but a new buffer_head is constructed which labels the data
  * to be written with the correct destination disk block.
+ * 
+ * jbd2_journal_write_metadata_buffer：将元数据缓冲区写入日志。该函数返回一个指针，指向用于IO的buffer_head。
+ * 
+ * 将元数据缓冲区写入给定磁盘块。实际的IO并未执行，但构造了一个新的buffer_head，
+ * 该buffer_head用正确的目标磁盘块标记要写入的数据。
  *
  * Any magic-number escaping which needs to be done will cause a
  * copy-out here.  If the buffer happens to start with the
@@ -339,12 +364,22 @@ static void journal_kill_thread(journal_t *journal)
  * marked as an escaped buffer in the corresponding log descriptor
  * block.  The missing word can then be restored when the block is read
  * during recovery.
+ * 
+ * 需要执行的任何magic-number转义都会导致此处的复制。如果缓冲区恰好以JBD2_MAGIC_NUMBER开头，
+ * 那么我们不能直接将其写入日志：只有在描述符块中才会将magic number写入日志。
+ * 在这种情况下，我们复制数据并将第一个字替换为0，然后返回一个结果代码，
+ * 该代码指示此缓冲区需要在相应的日志描述符块中标记为转义缓冲区。
+ * 在恢复期间读取块时，可以恢复丢失的字。
  *
  * If the source buffer has already been modified by a new transaction
  * since we took the last commit snapshot, we use the frozen copy of
  * that data for IO. If we end up using the existing buffer_head's data
  * for the write, then we have to make sure nobody modifies it while the
  * IO is in progress. do_get_write_access() handles this.
+ * 
+ * 如果自从我们拍摄最后一次提交快照以来，源缓冲区已被新事务修改，则我们使用该数据的冻结副本进行IO。
+ * 如果我们最终使用现有的buffer_head的数据进行写入， 那么我们必须确保在IO正在进行时没有人修改它。
+ * do_get_write_access()处理此问题。
  *
  * The function returns a pointer to the buffer_head to be used for IO.
  * 
@@ -356,6 +391,9 @@ static void journal_kill_thread(journal_t *journal)
  * On success:
  * Bit 0 set == escape performed on the data
  * Bit 1 set == buffer copy-out performed (kfree the data after IO)
+ * 
+ * 输入一个journal_head，journal开始块号blocknr，和要将其写入的transaction，
+ * 得到用于committing trans的bh_out
  */
 
 int jbd2_journal_write_metadata_buffer(transaction_t *transaction,
@@ -381,10 +419,15 @@ int jbd2_journal_write_metadata_buffer(transaction_t *transaction,
 	 * akpm: except if we're journalling data, and write() output is
 	 * also part of a shared mapping, and another thread has
 	 * decided to launch a writepage() against this buffer.
+	 * 
+	 * 缓冲区真的不应该被锁定：只有当前提交的事务才允许写入它，因此其他人不允许执行任何IO。
+	 * 
+	 * akpm：除非我们正在journal数据，并且write()输出也是共享映射的一部分，
+	 * 并且另一个线程已经决定针对该缓冲区启动writepage()。
 	 */
 	J_ASSERT_BH(bh_in, buffer_jbddirty(bh_in));
 
-	new_bh = alloc_buffer_head(GFP_NOFS|__GFP_NOFAIL);
+	new_bh = alloc_buffer_head(GFP_NOFS|__GFP_NOFAIL);	// new_bh是用于committing_trans的buffer_head
 
 	/* keep subsequent assertions sane */
 	atomic_set(&new_bh->b_count, 1);
@@ -395,12 +438,12 @@ repeat:
 	 * If a new transaction has already done a buffer copy-out, then
 	 * we use that version of the data for the commit.
 	 */
-	if (jh_in->b_frozen_data) {
+	if (jh_in->b_frozen_data) {		// 该事务有冻结的缓冲区数据副本
 		done_copy_out = 1;
-		new_page = virt_to_page(jh_in->b_frozen_data);
+		new_page = virt_to_page(jh_in->b_frozen_data);	// 该事务的冻结缓冲区数据副本所在的页
 		new_offset = offset_in_page(jh_in->b_frozen_data);
 	} else {
-		new_page = jh2bh(jh_in)->b_page;
+		new_page = jh2bh(jh_in)->b_page;				// 该事务的缓冲区所在的页
 		new_offset = offset_in_page(jh2bh(jh_in)->b_data);
 	}
 
@@ -410,11 +453,15 @@ repeat:
 	 * before checking for escaping, as the trigger may modify the magic
 	 * offset.  If a copy-out happens afterwards, it will have the correct
 	 * data in the buffer.
+	 * 
+	 * 如果数据尚未冻结，则触发数据冻结触发器。在检查转义之前执行此操作，因为触发器可能会修改magic offset。
+	 * 如果之后发生复制，缓冲区中将有正确的数据。
 	 */
 	if (!done_copy_out)
 		jbd2_buffer_frozen_trigger(jh_in, mapped_data + new_offset,
 					   jh_in->b_triggers);
 
+	// 以下三段代码是为了处理转义缓冲区需要的复制
 	/*
 	 * Check for escaping
 	 */
@@ -484,9 +531,12 @@ repeat:
 	 * The to-be-written buffer needs to get moved to the io queue,
 	 * and the original buffer whose contents we are shadowing or
 	 * copying is moved to the transaction's shadow queue.
+	 * 
+	 * 将要写入的缓冲区需要移动到io队列，而我们正在阴影或复制其内容的原始缓冲区将移动到事务的阴影队列。
 	 */
 	JBUFFER_TRACE(jh_in, "file as BJ_Shadow");
 	spin_lock(&journal->j_list_lock);
+	// 在一个给定的事务列表上归档一个buffer：将jh放到transaction的j_list对应列表中，jh事先要打扫干净自己（从原trans中脱离）
 	__jbd2_journal_file_buffer(jh_in, transaction, BJ_Shadow);
 	spin_unlock(&journal->j_list_lock);
 	set_buffer_shadow(bh_in);
@@ -774,6 +824,7 @@ EXPORT_SYMBOL(jbd2_complete_transaction);
 
 /*
  * Log buffer allocation routines:
+ * 为buffer分配返回下一个要写入的物理块号，存入retp
  */
 
 int jbd2_journal_next_log_block(journal_t *journal, unsigned long long *retp)
@@ -789,11 +840,13 @@ int jbd2_journal_next_log_block(journal_t *journal, unsigned long long *retp)
 	if (journal->j_head == journal->j_last)
 		journal->j_head = journal->j_first;
 	write_unlock(&journal->j_state_lock);
-	return jbd2_journal_bmap(journal, blocknr, retp);
+	return jbd2_journal_bmap(journal, blocknr, retp);	// 将（journal, blocknr）逻辑块号转换为物理块号，存入retp
 }
 
 /*
  * Conversion of logical to physical block numbers for the journal
+ * 
+ * 将（journal, blocknr）对应的逻辑块号转换为journal的物理块号，存入retp
  *
  * On external journals the journal blocks are identity-mapped, so
  * this is a no-op.  If needed, we can use j_blk_offset - everything is
@@ -885,6 +938,10 @@ void jbd2_descriptor_block_csum_set(journal_t *j, struct buffer_head *bh)
  *
  * The return value is 0 if journal tail cannot be pushed any further, 1 if
  * it can.
+ * 
+ * 返回journal中最旧的事务的tid和该事务开始的块号。
+ * 如果journal现在为空，则返回下一个要写入的事务ID以及该事务将从何处开始的信息。
+ * 如果journal尾部无法进一步推进，则返回值为0，如果可以，则为1。
  */
 int jbd2_journal_get_log_tail(journal_t *journal, tid_t *tid,
 			      unsigned long *block)
@@ -908,7 +965,7 @@ int jbd2_journal_get_log_tail(journal_t *journal, tid_t *tid,
 		*tid = journal->j_transaction_sequence;
 		*block = journal->j_head;
 	}
-	ret = tid_gt(*tid, journal->j_tail_sequence);
+	ret = tid_gt(*tid, journal->j_tail_sequence);	// tid是否大于log中最旧事物的序列号
 	spin_unlock(&journal->j_list_lock);
 	read_unlock(&journal->j_state_lock);
 
@@ -2527,6 +2584,8 @@ repeat:
 /*
  * Grab a ref against this buffer_head's journal_head.  If it ended up not
  * having a journal_head, return NULL
+ * 
+ * 从该buffer_head的journal_head中抓取一个引用。如果最终没有journal_head，则返回NULL
  */
 struct journal_head *jbd2_journal_grab_journal_head(struct buffer_head *bh)
 {

@@ -1569,6 +1569,9 @@ EXPORT_SYMBOL(block_invalidatepage);
  * We attach and possibly dirty the buffers atomically wrt
  * __set_page_dirty_buffers() via private_lock.  try_to_free_buffers
  * is already excluded via the page lock.
+ * 
+ * 我们通过private_lock相对于__set_page_dirty_buffers()原子地附加和可能dirty缓冲区。
+ * try_to_free_buffers已经通过页面锁排除。
  */
 void create_empty_buffers(struct page *page,
 			unsigned long blocksize, unsigned long b_state)
@@ -2008,11 +2011,13 @@ int __block_write_begin_int(struct page *page, loff_t pos, unsigned len,
 
 	block = (sector_t)page->index << (PAGE_SHIFT - bbits);
 
+	// buffer_head通过b_this_page指针形成一个环形链表，把这个页的所有缓冲链起来
+	// 前面说了循环链表，那么bh!=head就是链表还没有遍历完
 	for(bh = head, block_start = 0; bh != head || !block_start;
-	    block++, block_start=block_end, bh = bh->b_this_page) {
+	    block++, block_start=block_end, bh = bh->b_this_page) {	//block_start和_end是每个缓冲的起止
 		block_end = block_start + blocksize;
-		if (block_end <= from || block_start >= to) {
-			if (PageUptodate(page)) {
+		if (block_end <= from || block_start >= to) {	// 缓冲区不在写入范围内
+			if (PageUptodate(page)) {					// 如果页是最新的，那么把缓冲更成最新的
 				if (!buffer_uptodate(bh))
 					set_buffer_uptodate(bh);
 			}
@@ -2077,6 +2082,7 @@ int __block_write_begin(struct page *page, loff_t pos, unsigned len,
 }
 EXPORT_SYMBOL(__block_write_begin);
 
+// 以blocksize为粒度遍历该页的buffer，将每个buffer标记为已更新和脏
 static int __block_commit_write(struct inode *inode, struct page *page,
 		unsigned from, unsigned to)
 {
@@ -3114,6 +3120,8 @@ static int submit_bh_wbc(int op, int op_flags, struct buffer_head *bh,
 	/*
 	 * from here on down, it's all bio -- do the initial mapping,
 	 * submit_bio -> generic_make_request may further map this bio around
+	 * 
+	 * 从这里开始，都是bio -- 做初始映射，submit_bio -> generic_make_request可能会进一步映射这个bio
 	 */
 	bio = bio_alloc(GFP_NOIO, 1);
 
@@ -3122,6 +3130,9 @@ static int submit_bh_wbc(int op, int op_flags, struct buffer_head *bh,
 		wbc_account_io(wbc, bh->b_page, bh->b_size);
 	}
 
+	// bh->b_size: 映射（块）的大小，以字节为单位
+	// bh->b_size >> 9: 映射（块）的大小，以扇区为单位（一个扇区512字节）
+	// bh->b_blocknr * (bh->b_size >> 9)，映射块块号 * 每块扇区数 = 映射的扇区号
 	bio->bi_iter.bi_sector = bh->b_blocknr * (bh->b_size >> 9);
 	bio_set_dev(bio, bh->b_bdev);
 	bio->bi_write_hint = write_hint;
@@ -3223,6 +3234,9 @@ EXPORT_SYMBOL(write_dirty_buffer);
  * For a data-integrity writeout, we need to wait upon any in-progress I/O
  * and then start new I/O and then wait upon it.  The caller must have a ref on
  * the buffer_head.
+ * 
+ * 对于任何数据完整性写出，我们需要等待任何正在进行的I/O，然后开始新的I/O并等待它。
+ * 调用者必须在buffer_head上有一个引用。
  */
 int __sync_dirty_buffer(struct buffer_head *bh, int op_flags)
 {

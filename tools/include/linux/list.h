@@ -57,6 +57,8 @@ extern void __list_add(struct list_head *new,
  *
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
+ * 
+ * 在指定的头部head之后插入新条目new。这对于实现堆栈很有用。
  */
 static inline void list_add(struct list_head *new, struct list_head *head)
 {

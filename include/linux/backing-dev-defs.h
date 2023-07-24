@@ -81,6 +81,17 @@ struct bdi_writeback_congested {
  * change as blkcg is disabled and enabled higher up in the hierarchy, a wb
  * is tested for blkcg after lookup and removed from index on mismatch so
  * that a new wb for the combination can be created.
+ * 
+ * 每个wb（bdi_writeback）可以独立地执行回写操作，可以独立地被测量和限制。
+ * 在没有cgroup writeback的情况下，每个bdi（bdi_writeback）都由其嵌入的bdi->wb提供服务。
+ * 
+ * 在默认层次结构上，blkcg隐式启用memcg。这允许使用memcg的页面所有权来归属回写IO，
+ * 并且每个memcg - blkcg组合都可以通过为每个memcg分配专用的wb以使用其自己的wb提供服务，
+ * 这使得可以跨不同的cgroup进行隔离，并将IO回压从IO层向下传播到生成脏页面的任务。
+ * 
+ * cgroup wb在其bdi上由关联的memcg的ID索引，与附加到它的inode的数量一起引用，并固定memcg和相应的blkcg。
+ * 由于memcg的相应blkcg可能会更改，因为blkcg在层次结构中更高的位置被禁用和启用，因此在查找后会测试blkcg的wb，
+ * 并在不匹配时从索引中删除，以便可以为组合创建新的wb。
  */
 struct bdi_writeback {
 	struct backing_dev_info *bdi;	/* our parent bdi */
@@ -109,6 +120,11 @@ struct bdi_writeback {
 	 * All the bdi tasks' dirty rate will be curbed under it.
 	 * @dirty_ratelimit tracks the estimated @balanced_dirty_ratelimit
 	 * in small steps and is much more smooth/stable than the latter.
+	 * 
+	 * 基本的脏限制速率，每200ms重新计算一次。
+	 * 所有bdi任务的脏速率都将在其下。
+	 * @dirty_ratelimit跟踪小步骤中估计的@balanced_dirty_ratelimit，
+	 * 并且比后者更平滑/稳定。
 	 */
 	unsigned long dirty_ratelimit;
 	unsigned long balanced_dirty_ratelimit;

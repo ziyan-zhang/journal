@@ -1249,6 +1249,10 @@ void ext2_sync_super(struct super_block *sb, struct ext2_super_block *es,
  * flags to 0.  We need to set this flag to 0 since the fs
  * may have been checked while mounted and e2fsck may have
  * set s_state to EXT2_VALID_FS after some corrections.
+ * 
+ * 在ext2文件系统中，不需要写超级块，因为我们使用缓冲区中的磁盘超级块的映射。
+ * 然而，这个函数仍然用于将fs有效标志设置为0。我们需要将此标志设置为0，因为在挂载时可能已经检查了fs，
+ * 并且e2fsck可能已经在一些更正后将s_state设置为EXT2_VALID_FS。
  */
 static int ext2_sync_fs(struct super_block *sb, int wait)
 {
@@ -1258,6 +1262,8 @@ static int ext2_sync_fs(struct super_block *sb, int wait)
 	/*
 	 * Write quota structures to quota file, sync_blockdev() will write
 	 * them to disk later
+	 * 
+	 * 将配额结构写入配额文件，sync_blockdev()稍后将它们写入磁盘
 	 */
 	dquot_writeback_dquots(sb, -1);
 

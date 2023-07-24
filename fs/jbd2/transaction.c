@@ -1853,6 +1853,8 @@ __blist_del_buffer(struct journal_head **list, struct journal_head *jh)
 
 /*
  * Remove a buffer from the appropriate transaction list.
+ * 
+ * 根据journal_head的buffer类型，从拥有此jh的事务的合适的列表中删除缓冲区。
  *
  * Note that this function can *change* the value of
  * bh->b_transaction->t_buffers, t_forget, t_shadow_list, t_log_list or
@@ -1906,6 +1908,8 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 
 /*
  * Remove buffer from all transactions.
+ *
+ * 从所有的transaction中删除buffer
  *
  * Called with bh_state lock and j_list_lock
  *
@@ -2354,6 +2358,7 @@ int jbd2_journal_invalidatepage(journal_t *journal,
 
 /*
  * File a buffer on the given transaction list.
+ * 在一个给定的事务列表上登记一个buffer：将jh放到transaction的j_list对应列表中，jh事先要打扫干净自己（从原trans中脱离）
  */
 void __jbd2_journal_file_buffer(struct journal_head *jh,
 			transaction_t *transaction, int jlist)
@@ -2388,10 +2393,12 @@ void __jbd2_journal_file_buffer(struct journal_head *jh,
 			was_dirty = 1;
 	}
 
+	//  如果jh属于某个事务，那么从这个事务的列表中删除jh
 	if (jh->b_transaction)
-		__jbd2_journal_temp_unlink_buffer(jh);
+		__jbd2_journal_temp_unlink_buffer(jh);	// 根据jh的buffer类型，从拥有此jh的事务的合适的列表中删除缓冲区。
 	else
-		jbd2_journal_grab_journal_head(bh);
+		jbd2_journal_grab_journal_head(bh);		// 给bh对应的jh的引用加一确实不需要接收返回的jh，因为一定是jh2bh(jh)的jh
+												// 引用加一是因为要把jh放到后面的transaction中，所以要保证jh不会被释放
 	jh->b_transaction = transaction;
 
 	switch (jlist) {
@@ -2436,6 +2443,9 @@ void jbd2_journal_file_buffer(struct journal_head *jh,
  * dropping it from its current transaction entirely.  If the buffer has
  * already started to be used by a subsequent transaction, refile the
  * buffer on that transaction's metadata list.
+ * 
+ * 从其当前的buffer列表中删除该buffer，以准备完全从当前事务中删除它。
+ * 如果buffer已经开始被后续事务使用，则将buffer重新归档在那个事务的元数据列表中。
  *
  * Called under j_list_lock
  * Called under jbd_lock_bh_state(jh2bh(jh))
@@ -2453,23 +2463,28 @@ void __jbd2_journal_refile_buffer(struct journal_head *jh)
 
 	/* If the buffer is now unused, just drop it. */
 	if (jh->b_next_transaction == NULL) {
-		__jbd2_journal_unfile_buffer(jh);
+		__jbd2_journal_unfile_buffer(jh);	// 从所有缓冲区中删除buffer
 		return;
 	}
 
 	/*
 	 * It has been modified by a later transaction: add it to the new
 	 * transaction's metadata list.
+	 * 
+	 * 它已经被后续事务修改：将其添加到新事务的元数据列表中。
 	 */
 
 	was_dirty = test_clear_buffer_jbddirty(bh);
-	__jbd2_journal_temp_unlink_buffer(jh);
+	__jbd2_journal_temp_unlink_buffer(jh);	// 根据journal_head的buffer类型，从拥有此jh的事务的合适的列表中删除缓冲区。
 	/*
 	 * We set b_transaction here because b_next_transaction will inherit
 	 * our jh reference and thus __jbd2_journal_file_buffer() must not
 	 * take a new one.
+	 * 
+	 * 我们在这里设置b_transaction，因为b_next_transaction将继承我们的jh引用，
+	 * 因此__jbd2_journal_file_buffer()不能获取新的引用。
 	 */
-	jh->b_transaction = jh->b_next_transaction;
+	jh->b_transaction = jh->b_next_transaction;		// jh的当前事务置为后续事务；后续事务置空
 	jh->b_next_transaction = NULL;
 	if (buffer_freed(bh))
 		jlist = BJ_Forget;
@@ -2477,7 +2492,7 @@ void __jbd2_journal_refile_buffer(struct journal_head *jh)
 		jlist = BJ_Metadata;
 	else
 		jlist = BJ_Reserved;
-	__jbd2_journal_file_buffer(jh, jh->b_transaction, jlist);
+	__jbd2_journal_file_buffer(jh, jh->b_transaction, jlist);	// 将jh放入对应jh->b_trans对应jlist类型的列表中
 	J_ASSERT_JH(jh, jh->b_transaction->t_state == T_RUNNING);
 
 	if (was_dirty)

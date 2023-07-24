@@ -27,13 +27,17 @@
  * submit IO for these buffers via __sync_blockdev(). This also speeds up the
  * wait == 1 case since in that case write_inode() functions do
  * sync_dirty_buffer() and thus effectively write one block at a time.
+ * 
+ * 做文件系统同步工作。对于简单的文件系统，writeback_inodes_sb（sb）只是用inode脏缓冲区，
+ * 因此我们必须通过__sync_blockdev（）提交这些缓冲区的IO。这也加快了wait == 1的情况，
+ * 因为在这种情况下，write_inode（）函数执行sync_dirty_buffer（），从而有效地一次写入一个块。
  */
 static int __sync_filesystem(struct super_block *sb, int wait)
 {
 	if (wait)
-		sync_inodes_sb(sb);
+		sync_inodes_sb(sb);		// 被加速。write_inode函数执行sync_dirty_buffer，一次写入一个块
 	else
-		writeback_inodes_sb(sb, WB_REASON_SYNC);
+		writeback_inodes_sb(sb, WB_REASON_SYNC);	// 对于简单fs，此函数只用inode脏缓冲区
 
 	if (sb->s_op->sync_fs)
 		sb->s_op->sync_fs(sb, wait);
@@ -44,6 +48,8 @@ static int __sync_filesystem(struct super_block *sb, int wait)
  * Write out and wait upon all dirty data associated with this
  * superblock.  Filesystem data as well as the underlying block
  * device.  Takes the superblock lock.
+ * 
+ * 写出并等待与此超级块关联的所有脏数据。文件系统数据以及底层块设备。获取超级块锁。
  */
 int sync_filesystem(struct super_block *sb)
 {
@@ -104,16 +110,21 @@ static void fdatawait_one_bdev(struct block_device *bdev, void *arg)
  * Finally, we writeout all block devices because some filesystems (e.g. ext2)
  * just write metadata (such as inodes or bitmaps) to block device page cache
  * and do not sync it on their own in ->sync_fs().
+ * 
+ * 同步所有内容。我们首先唤醒刷新线程，以便大多数写回在所有设备上并行运行。然后我们可靠地同步所有inode，
+ * 这实际上也等待所有刷新线程完成写回。此时，所有数据都在磁盘上，因此元数据应该是稳定的，
+ * 我们通过->sync_fs（）调用告诉文件系统同步其元数据。最后，我们写出所有块设备，因为某些文件系统（例如ext2）
+ * 只是将元数据（例如inode或位图）写入块设备页缓存，并且不会在->sync_fs（）中自行同步。
  */
 SYSCALL_DEFINE0(sync)
 {
 	int nowait = 0, wait = 1;
 
-	wakeup_flusher_threads(0, WB_REASON_SYNC);
-	iterate_supers(sync_inodes_one_sb, NULL);
-	iterate_supers(sync_fs_one_sb, &nowait);
+	wakeup_flusher_threads(0, WB_REASON_SYNC);	// 使大多数回写在所有设备上并行运行
+	iterate_supers(sync_inodes_one_sb, NULL);	// 可靠地同步所有inodes
+	iterate_supers(sync_fs_one_sb, &nowait);	// 告诉文件系统可以同步其元数据了
 	iterate_supers(sync_fs_one_sb, &wait);
-	iterate_bdevs(fdatawrite_one_bdev, NULL);
+	iterate_bdevs(fdatawrite_one_bdev, NULL);	// 写出所有块设备（考虑到ext2的元数据不在sync_fs()中同步等场景）
 	iterate_bdevs(fdatawait_one_bdev, NULL);
 	if (unlikely(laptop_mode))
 		laptop_sync_completion();

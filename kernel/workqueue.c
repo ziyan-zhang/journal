@@ -2184,6 +2184,10 @@ static void process_scheduled_works(struct worker *worker)
  * work items regardless of their specific target workqueue.  The only
  * exception is work items which belong to workqueues with a rescuer which
  * will be explained in rescuer_thread().
+ * 
+ * 所有的worker都属于一个worker_pool，无论是per-cpu的还是动态的unbound的。
+ * 这些worker处理所有的work item，不管他们的特定目标workqueue。
+ * 唯一的例外是属于有rescuer的workqueue的work item，这将在rescuer_thread()中解释。
  *
  * Return: 0
  */

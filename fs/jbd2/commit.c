@@ -188,6 +188,10 @@ static int journal_wait_on_commit_record(journal_t *journal,
  * We don't do block allocation here even for delalloc. We don't
  * use writepages() because with dealyed allocation we may be doing
  * block allocation in writepages().
+ * 
+ * 使用writepage() address_space_operations写入filemap数据。
+ * 即使对于delalloc，我们也不在这里执行块分配。我们不使用writepages()，
+ * 因为使用延迟分配，我们可能会在writepages()中执行块分配。
  */
 static int journal_submit_inode_data_buffers(struct address_space *mapping)
 {
@@ -210,6 +214,11 @@ static int journal_submit_inode_data_buffers(struct address_space *mapping)
  * We are in a committing transaction. Therefore no new inode can be added to
  * our inode list. We use JI_COMMIT_RUNNING flag to protect inode we currently
  * operate on from being released while we write out pages.
+ * 
+ * 将与事务关联的inode的所有数据缓冲区提交到磁盘。
+ * 
+ * 我们处于提交事务中。因此，不能将新的inode添加到我们的inode列表中。
+ * 我们使用JI_COMMIT_RUNNING标志来保护我们当前操作的inode，以防止在写出页面时释放它。
  */
 static int journal_submit_data_buffers(journal_t *journal,
 		transaction_t *commit_transaction)
@@ -230,6 +239,9 @@ static int journal_submit_data_buffers(journal_t *journal,
 		 * instead of writepages. Because writepages can do
 		 * block allocation  with delalloc. We need to write
 		 * only allocated blocks here.
+		 * 
+		 * 提交inode数据缓冲区。我们使用writepage而不是writepages。
+		 * 因为writepages可以使用delalloc进行块分配。我们需要在这里写入只是那些已分配的块。
 		 */
 		trace_jbd2_submit_inode_data(jinode->i_vfs_inode);
 		err = journal_submit_inode_data_buffers(mapping);
@@ -248,7 +260,8 @@ static int journal_submit_data_buffers(journal_t *journal,
 /*
  * Wait for data submitted for writeout, refile inodes to proper
  * transaction if needed.
- *
+ * 
+ * 等待 写出 数据提交，如果需要，将inode重新归档到适当的事务。
  */
 static int journal_finish_inode_data_buffers(journal_t *journal,
 		transaction_t *commit_transaction)
@@ -258,6 +271,10 @@ static int journal_finish_inode_data_buffers(journal_t *journal,
 
 	/* For locking, see the comment in journal_submit_data_buffers() */
 	spin_lock(&journal->j_list_lock);
+	// list_for_each_entry(pos, head, member)用于遍历一个双向链表，并对每个元素执行特定的操作
+	// pos: 用于记录当前遍历到的链表⛓元素的指针. 在每次迭代时，它会指向链表中的一个元素
+	// head: 表示要遍历的链表的头指针（即链表的头节点）
+	// memeber: 表示链表节点结构中用于链接的成员名称
 	list_for_each_entry(jinode, &commit_transaction->t_inode_list, i_list) {
 		if (!(jinode->i_flags & JI_WAIT_DATA))
 			continue;
@@ -280,7 +297,7 @@ static int journal_finish_inode_data_buffers(journal_t *journal,
 		if (jinode->i_next_transaction) {
 			jinode->i_transaction = jinode->i_next_transaction;
 			jinode->i_next_transaction = NULL;
-			list_add(&jinode->i_list,
+			list_add(&jinode->i_list,	// 在 &jinode->i_transaction->t_inode_list 后添加 jinode->i_list
 				&jinode->i_transaction->t_inode_list);
 		} else {
 			jinode->i_transaction = NULL;
@@ -342,6 +359,8 @@ static void jbd2_block_tag_csum_set(journal_t *j, journal_block_tag_t *tag,
  *
  * The primary function for committing a transaction to the log.  This
  * function is called by the journal thread to begin a complete commit.
+ * 
+ * 提交事务到日志的主要函数。此函数由日志线程调用以开始完整提交。
  */
 void jbd2_journal_commit_transaction(journal_t *journal)
 {
@@ -371,8 +390,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	tid_t first_tid;
 	int update_tail;
 	int csum_size = 0;
-	LIST_HEAD(io_bufs);
-	LIST_HEAD(log_bufs);
+	LIST_HEAD(io_bufs);		// bh_out->associated_buffers会放在这里面，这个io_bufs真正用来IO?
+	LIST_HEAD(log_bufs);	// commit_transaction的回滚记录会放在这里面，并用于IO
 
 	if (jbd2_journal_has_csum_v2or3(journal))
 		csum_size = sizeof(struct jbd2_journal_block_tail);
@@ -380,10 +399,12 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	/*
 	 * First job: lock down the current transaction and wait for
 	 * all outstanding updates to complete.
+	 * 
+	 * 第一个工作：锁定当前事务并等待所有未完成的更新完成。
 	 */
 
 	/* Do we need to erase the effects of a prior jbd2_journal_flush? */
-	if (journal->j_flags & JBD2_FLUSHED) {
+	if (journal->j_flags & JBD2_FLUSHED) {		// journal超级块被flush了
 		jbd_debug(3, "super block updated\n");
 		mutex_lock_io(&journal->j_checkpoint_mutex);
 		/*
@@ -391,6 +412,9 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		 * We don't need any special data guarantees for writing sb
 		 * since journal is empty and it is ok for write to be
 		 * flushed only with transaction commit.
+		 * 
+		 * 我们持有j_checkpoint_mutex，因此tail不能在我们下面改变。
+		 * 我们不需要任何特殊的数据保证来写sb，因为日志是空的，并且只在事务提交时才刷新写入是可以的。
 		 */
 		jbd2_journal_update_sb_log_tail(journal,
 						journal->j_tail_sequence,
@@ -401,6 +425,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		jbd_debug(3, "superblock not updated\n");
 	}
 
+	// 开始提交的时候要保证running trans有，committing trans没有
+	// 然后提交当前的running trans
 	J_ASSERT(journal->j_running_transaction != NULL);
 	J_ASSERT(journal->j_committing_transaction == NULL);
 
@@ -426,6 +452,9 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 					      stats.run.rs_locked);
 
 	spin_lock(&commit_transaction->t_handle_lock);
+	// 下面的循环：只要此提交事务上面有未完成的更新，那么就等待
+	// 等待时释放保护journal信息的commit_transaction->t_handle_lock
+	// 			保护journal中各种标量的journal->j_state_lock
 	while (atomic_read(&commit_transaction->t_updates)) {
 		DEFINE_WAIT(wait);
 
@@ -460,6 +489,15 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	 * has reserved.  This is consistent with the existing behaviour
 	 * that multiple jbd2_journal_get_write_access() calls to the same
 	 * buffer are perfectly permissible.
+	 * 
+	 * 我们被允许做的第一件事是丢弃任何剩余的BJ_Reserved缓冲区。
+	 * 注意，不能假设没有这样的缓冲区：如果像截断这样的大型文件系统操作需要将自身分割成多个事务，
+	 * 那么它可能在仍有BJ_Reserved缓冲区未完成时尝试执行jbd2_journal_restart()。
+	 * 这些必须从当前事务中清除。
+	 * 
+	 * 在这种情况下，文件系统在修改新事务中的缓冲区之前仍然必须重新保留写访问权限，
+	 * 但是我们不要求它记住它保留了哪些旧缓冲区。
+	 * 这与现有行为一致，即对同一缓冲区的多个jbd2_journal_get_write_access()调用是完全允许的。
 	 */
 	while (commit_transaction->t_reserved_list) {
 		jh = commit_transaction->t_reserved_list;
@@ -476,6 +514,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			jh->b_committed_data = NULL;
 			jbd_unlock_bh_state(bh);
 		}
+		//  从其当前buffer列表中删除该buffer，以准备完全从当前事务中删除它。
+		//  如果buffer已经开始被后续事务使用，则将buffer重新归档在那个事务的元数据列表中。
 		jbd2_journal_refile_buffer(journal, jh);
 	}
 
@@ -483,6 +523,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	 * Now try to drop any written-back buffers from the journal's
 	 * checkpoint lists.  We do this *before* commit because it potentially
 	 * frees some memory
+	 * 
+	 * 现在尝试从日志的检查点列表中删除任何已写回的缓冲区。我们在提交之前执行此操作，因为它可能释放一些内存
 	 */
 	spin_lock(&journal->j_list_lock);
 	__jbd2_journal_clean_checkpoint_list(journal, false);
@@ -493,6 +535,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	/*
 	 * Clear revoked flag to reflect there is no revoked buffers
 	 * in the next transaction which is going to be started.
+	 * 
+	 * 清除撤销标志以反映下一个要启动的事务中没有撤销的缓冲区。
 	 */
 	jbd2_clear_buffer_revoked_flags(journal);
 
@@ -520,20 +564,22 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	wake_up(&journal->j_wait_transaction_locked);
 	write_unlock(&journal->j_state_lock);
 
-	jbd_debug(3, "JBD2: commit phase 2a\n");
+	jbd_debug(3, "JBD2: commit phase 2a\n");	// phase 2a: 写数据
 
 	/*
 	 * Now start flushing things to disk, in the order they appear
 	 * on the transaction lists.  Data blocks go first.
+	 * 
+	 * 现在开始按照它们出现在事务列表中的顺序将事物刷新到磁盘上。数据块首先。
 	 */
-	err = journal_submit_data_buffers(journal, commit_transaction);
+	err = journal_submit_data_buffers(journal, commit_transaction);		// 写数据的函数（非journal一部分？）？（写也只是提交到bio估计）
 	if (err)
 		jbd2_journal_abort(journal, err);
 
 	blk_start_plug(&plug);
-	jbd2_journal_write_revoke_records(commit_transaction, &log_bufs);
+	jbd2_journal_write_revoke_records(commit_transaction, &log_bufs);	// 将回滚记录写入到日志缓冲区log_bufs中
 
-	jbd_debug(3, "JBD2: commit phase 2b\n");
+	jbd_debug(3, "JBD2: commit phase 2b\n");	// phase 2b：写元数据
 
 	/*
 	 * Way to go: we have now written out all of the data for a
@@ -558,7 +604,7 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	err = 0;
 	bufs = 0;
 	descriptor = NULL;
-	while (commit_transaction->t_buffers) {
+	while (commit_transaction->t_buffers) {		// t_buffers是此事务拥有的所有元数据缓冲区的双向循环链表
 
 		/* Find the next buffer to be journaled... */
 
@@ -567,6 +613,7 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		/* If we're in abort mode, we just un-journal the buffer and
 		   release it. */
 
+		// 如果journal被中止，我们清除buffer dirty位并释放buffer。
 		if (is_journal_aborted(journal)) {
 			clear_buffer_jbddirty(jh2bh(jh));
 			JBUFFER_TRACE(jh, "journal is aborting: refile");
@@ -574,7 +621,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 						  jh->b_frozen_data ?
 						  jh->b_frozen_triggers :
 						  jh->b_triggers);
-			jbd2_journal_refile_buffer(journal, jh);
+			jbd2_journal_refile_buffer(journal, jh);// 从其当前的buffer列表中删除该buffer，以准备完全从当前事务中删除它。
+ 										// 如果buffer已经开始被后续事务使用，则将buffer重新归档在那个事务的元数据列表中。
 			/* If that was the last one, we need to clean up
 			 * any descriptor buffers which may have been
 			 * already allocated, even if we are now
@@ -585,7 +633,10 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		}
 
 		/* Make sure we have a descriptor block in which to
-		   record the metadata buffer. */
+		   record the metadata buffer. 
+		   
+		   保证我们有一个描述符块来记录元数据缓冲区。
+		   */
 
 		if (!descriptor) {
 			J_ASSERT (bufs == 0);
@@ -617,9 +668,9 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			jbd2_file_log_bh(&log_bufs, descriptor);
 		}
 
-		/* Where is the buffer to be written? */
+		/* Where is the buffer to be written? 要被写的buffer在哪里？*/
 
-		err = jbd2_journal_next_log_block(journal, &blocknr);
+		err = jbd2_journal_next_log_block(journal, &blocknr);	// journal中的下一个可用的物理块号存入blocknr
 		/* If the block mapping failed, just abandon the buffer
 		   and repeat this loop: we'll fall into the
 		   refile-on-abort condition above. */
@@ -632,6 +683,9 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		 * start_this_handle() uses t_outstanding_credits to determine
 		 * the free space in the log, but this counter is changed
 		 * by jbd2_journal_next_log_block() also.
+		 * 
+		 * start_this_handle()使用t_outstanding_credits来确定日志中的空闲空间，
+		 * 但是这个计数器也被jbd2_journal_next_log_block() （间接地？）更改。
 		 */
 		atomic_dec(&commit_transaction->t_outstanding_credits);
 
@@ -643,16 +697,19 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		/*
 		 * Make a temporary IO buffer with which to write it out
 		 * (this will requeue the metadata buffer to BJ_Shadow).
+		 * 
+		 * 制作一个临时IO缓冲区，用于将其写出（这将重新入队元数据缓冲区到BJ_Shadow）。
 		 */
 		set_bit(BH_JWrite, &jh2bh(jh)->b_state);
-		JBUFFER_TRACE(jh, "ph3: write metadata");
+		JBUFFER_TRACE(jh, "ph3: write metadata");	// 下面这行是写元数据的函数吧
+		// 输入journal头jh，journal开始块号blocknr，要将journal写入的commit_trans，得到要写的wbuf
 		flags = jbd2_journal_write_metadata_buffer(commit_transaction,
 						jh, &wbuf[bufs], blocknr);
 		if (flags < 0) {
 			jbd2_journal_abort(journal, flags);
 			continue;
 		}
-		jbd2_file_log_bh(&io_bufs, wbuf[bufs]);
+		jbd2_file_log_bh(&io_bufs, wbuf[bufs]);	// wbuf->associated_buffers插入到指定的io_bufs(list_head)前面
 
 		/* Record the new block's tag in the current descriptor
                    buffer */
@@ -680,7 +737,10 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		}
 
 		/* If there's no more to do, or if the descriptor is full,
-		   let the IO rip! */
+		   let the IO rip! 
+		   
+		   如果没有更多事情可以做或者描述符已满，则让IO撕裂。TODO: WHAT RIP?
+		   */
 
 		if (bufs == journal->j_wbufsize ||
 		    commit_transaction->t_buffers == NULL ||
@@ -712,7 +772,8 @@ start_journal_io:
 				bh->b_end_io = journal_end_buffer_io_sync;
 				submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
 			}
-			cond_resched();
+			cond_resched();		// 调度让步，ckck: 合理吗？
+			// ckck: 这个调度让步合理吗
 			stats.run.rs_blocks_logged += bufs;
 
 			/* Force a new descriptor to be generated next
@@ -720,8 +781,9 @@ start_journal_io:
 			descriptor = NULL;
 			bufs = 0;
 		}
-	}
+	}		// commit_transaction->t_buffers遍历完成
 
+	// 等待 写出 数据已提交，如果需要，将inode重新归档到适当的事务。
 	err = journal_finish_inode_data_buffers(journal, commit_transaction);
 	if (err) {
 		printk(KERN_WARNING
@@ -738,8 +800,13 @@ start_journal_io:
 	 * blocks of all older transactions are checkpointed to persistent
 	 * storage and we will be safe to update journal start in the
 	 * superblock with the numbers we get here.
+	 * 
+	 * 在我们发出对文件系统设备的flush之前，获取log中当前最旧的事务。
+	 * 在flush之后，我们可以确保所有旧事务的块都被检查点到持久存储中，
+	 * 并且我们可以安全地使用我们在此处获得的数字更新超级块中的日志开始(journal start)。
 	 */
-	update_tail =
+	update_tail =	//返回journal中最旧的事务的tid作为first_tid和该事务开始的块号作为first_block。
+					// update_tail = tid是否大于log中最旧事物的序列号
 		jbd2_journal_get_log_tail(journal, &first_tid, &first_block);
 
 	write_lock(&journal->j_state_lock);
@@ -749,7 +816,7 @@ start_journal_io:
 		if (first_block < journal->j_tail)
 			freed += journal->j_last - journal->j_first;
 		/* Update tail only if we free significant amount of space */
-		if (freed < journal->j_maxlen / 4)
+		if (freed < journal->j_maxlen / 4)	// 只有当释放的journal空间大于1/4 journal最大空间时才更新log tail
 			update_tail = 0;
 	}
 	J_ASSERT(commit_transaction->t_state == T_COMMIT);
@@ -785,7 +852,11 @@ start_journal_io:
 	   Wait for the buffers in reverse order.  That way we are
 	   less likely to be woken up until all IOs have completed, and
 	   so we incur less scheduling load.
+
+	   你瞧：我们刚刚设法将事务发送到日志。在提交之前，请等待IO完成。正在写入的控制缓冲区位于事务的t_log_list队列中，
+	   元数据缓冲区位于io_bufs列表中。以相反的顺序等待缓冲区。这样，我们就不太可能在所有IO完成之前被唤醒，从而减少调度负载
 	*/
+	// ckck: t_log_list不是transaction_t的属性之一呀？？？
 
 	jbd_debug(3, "JBD2: commit phase 3\n");
 
@@ -794,34 +865,43 @@ start_journal_io:
 						    struct buffer_head,
 						    b_assoc_buffers);
 
-		wait_on_buffer(bh);
-		cond_resched();
+		wait_on_buffer(bh);		// 阻塞当前进程，直到该缓冲区的所有IO操作完成
+		cond_resched();		// 检查是否需要进行调度，并在需要时触发调度
 
 		if (unlikely(!buffer_uptodate(bh)))
 			err = -EIO;
-		jbd2_unfile_log_bh(bh);
+		jbd2_unfile_log_bh(bh);		// 将bh->associated_buffers从io_bufs(list_head)中移除并初始化
 
 		/*
 		 * The list contains temporary buffer heads created by
 		 * jbd2_journal_write_metadata_buffer().
+		 * 
+		 * 列表包含由jbd2_journal_write_metadata_buffer()创建的临时缓冲头。
 		 */
 		BUFFER_TRACE(bh, "dumping temporary bh");
 		__brelse(bh);
 		J_ASSERT_BH(bh, atomic_read(&bh->b_count) == 0);
 		free_buffer_head(bh);
 
-		/* We also have to refile the corresponding shadowed buffer */
-		jh = commit_transaction->t_shadow_list->b_tprev;
+		/* We also have to refile the corresponding shadowed buffer 
+		* 我们还必须重新归档相应的阴影缓冲区
+		*/
+		jh = commit_transaction->t_shadow_list->b_tprev;	// commit_transaction->t_shadow_list中最后一个jh
 		bh = jh2bh(jh);
-		clear_buffer_jwrite(bh);
+		clear_buffer_jwrite(bh);	// 将bh缓冲区的jwrite标志设置为未设置状态，即表示该缓冲区的数据已成功写入到日志设备中
 		J_ASSERT_BH(bh, buffer_jbddirty(bh));
 		J_ASSERT_BH(bh, !buffer_shadow(bh));
 
 		/* The metadata is now released for reuse, but we need
                    to remember it against this transaction so that when
                    we finally commit, we can do any checkpointing
-                   required. */
+                   required. 
+				   
+				   元数据现在已释放以供重用，但是我们需要记住它以防止此事务，
+				   以便当我们最终提交时，我们可以执行任何所需的检查点操作。
+				   */
 		JBUFFER_TRACE(jh, "file as BJ_Forget");
+		// 把jh打扫干净，并放到commit_transaction->t_forget上
 		jbd2_journal_file_buffer(jh, commit_transaction, BJ_Forget);
 		JBUFFER_TRACE(jh, "brelse shadowed buffer");
 		__brelse(bh);
@@ -831,7 +911,9 @@ start_journal_io:
 
 	jbd_debug(3, "JBD2: commit phase 4\n");
 
-	/* Here we wait for the revoke record and descriptor record buffers */
+	/* Here we wait for the revoke record and descriptor record buffers
+	 * 这里我们等待撤销记录和描述符记录缓冲区
+	 */
 	while (!list_empty(&log_bufs)) {
 		struct buffer_head *bh;
 

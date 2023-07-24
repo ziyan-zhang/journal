@@ -558,7 +558,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 			fsnotify_modify(file);
 			add_wchar(current, ret);
 		}
-		inc_syscw(current);
+		inc_syscw(current);		// 当前任务的io计数+1
 		file_end_write(file);
 	}
 
