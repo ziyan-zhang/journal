@@ -1,12 +1,12 @@
 qemu-system-x86_64 -s -S\
-	-nographic -serial mon:stdio -smp 2 -m 2048 \
+	-nographic -smp 2 -m 2048 --enable-kvm \
 	-kernel Linux_compiled/arch/x86_64/boot/bzImage \
 	-hda ~/lab/ubuntu.img \
 	-append "root=/dev/sda2 rw console=ttyS0" \
-	-hdb ~/lab/swap_ext4.img \
-	-hdc ~/lab/exe_mj.img \
-	-hdd ~/lab/vana_ext2.img \
+	-hdb /home/zy/lab/swap_ext4.img \
 	-device nvme,drive=nvme1,serial=deadbeaf,max_ioqpairs=8 \
 	-drive file=/home/zy/lab/ext2.qcow2,format=qcow2,if=none,cache=writeback,id=nvme1 \
 	-device nvme,drive=nvme2,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext4.qcow2,format=qcow2,if=none,cache=writeback,id=nvme2
+	-drive file=/home/zy/lab/ext4.qcow2,format=qcow2,if=none,cache=writeback,id=nvme2 \
+	-device nvme,drive=nvme3,serial=deadbeaf,max_ioqpairs=8 \
+	-drive file=/home/zy/lab/ext4_mj.qcow2,format=qcow2,if=none,cache=writeback,id=nvme3
