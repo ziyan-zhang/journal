@@ -59,7 +59,7 @@ struct bio {
 	struct gendisk		*bi_disk;
 	unsigned int		bi_opf;		/* bottom bits req flags,
 						 * top bits REQ_OP. Use
-						 * accessors.
+						 * accessors. 底部位req标志，顶部位REQ_OP。使用访问器。
 						 */
 	unsigned short		bi_flags;	/* status, etc and bvec pool number */
 	unsigned short		bi_ioprio;
