@@ -851,6 +851,9 @@ int jbd2_journal_next_log_block(journal_t *journal, unsigned long long *retp)
  * On external journals the journal blocks are identity-mapped, so
  * this is a no-op.  If needed, we can use j_blk_offset - everything is
  * ready.
+ * 
+ * 在外部journal上，journal块是identity-mapped，因此这是一个no-op。
+ * 如果需要，我们可以使用j_blk_offset - 一切都准备就绪。
  */
 int jbd2_journal_bmap(journal_t *journal, unsigned long blocknr,
 		 unsigned long long *retp)
@@ -895,6 +898,9 @@ jbd2_journal_get_descriptor_buffer(transaction_t *transaction, int type)
 	int err;
 
 	err = jbd2_journal_next_log_block(journal, &blocknr);
+
+	printk("我的块号: journal.c/ jbd2_journal_get_descriptor_buffer, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+
 
 	if (err)
 		return NULL;

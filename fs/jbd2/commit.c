@@ -31,6 +31,8 @@
 
 /*
  * IO end handler for temporary buffer_heads handling writes to the journal.
+ *
+ * IO结束处理程序，用于临时buffer_heads处理对日志的写入。
  */
 static void journal_end_buffer_io_sync(struct buffer_head *bh, int uptodate)
 {
@@ -42,7 +44,7 @@ static void journal_end_buffer_io_sync(struct buffer_head *bh, int uptodate)
 	else
 		clear_buffer_uptodate(bh);
 	if (orig_bh) {
-		clear_bit_unlock(BH_Shadow, &orig_bh->b_state);
+		clear_bit_unlock(BH_Shadow, &orig_bh->b_state);	// 清除并解锁orig_bh的BH_Shadow位
 		smp_mb__after_atomic();
 		wake_up_bit(&orig_bh->b_state, BH_Shadow);
 	}
@@ -62,6 +64,15 @@ static void journal_end_buffer_io_sync(struct buffer_head *bh, int uptodate)
  *
  * Called under lock_journal(), and possibly under journal_datalist_lock.  The
  * caller provided us with a ref against the buffer, and we drop that here.
+ * 
+ * 当截断ext4文件时，可能会有一些页面未能成功释放，因为它们附加到提交事务。
+ * 事务提交后，这些页面将保留在LRU上，没有->mapping，并有附加的缓冲区。
+ * VM可以轻松回收这些页面，但是它们的缺失会扰乱VM计数，并使/proc/meminfo中的数字看起来很奇怪。
+ * 
+ * 因此，在这里，我们有一个刚刚从忘记列表中删除的缓冲区。查看是否可以从后备页面中删除所有缓冲区。
+ * 
+ * 在lock_journal()下调用，并可能在journal_datalist_lock下调用。
+ * 调用者为我们提供了对缓冲区的引用，我们在这里drop它。
  */
 static void release_buffer_page(struct buffer_head *bh)
 {
@@ -81,11 +92,11 @@ static void release_buffer_page(struct buffer_head *bh)
 	if (!trylock_page(page))
 		goto nope;
 
-	get_page(page);
-	__brelse(bh);
-	try_to_free_buffers(page);
+	get_page(page);	// 增加page的引用计数，以确保页面在引用期间不会被释放
+	__brelse(bh);	// 释放bh，但不释放关联的page
+	try_to_free_buffers(page);	// 尝试释放与指定页面相关的所有缓冲区。
 	unlock_page(page);
-	put_page(page);
+	put_page(page);	// 减少page引用计数，以便页面不再被使用时释放相关内存资源
 	return;
 
 nope:
@@ -115,6 +126,11 @@ static void jbd2_commit_block_csum_set(journal_t *j, struct buffer_head *bh)
  * entirely.
  *
  * Returns 1 if the journal needs to be aborted or 0 on success
+ * 
+ * 完成所有操作：现在提交提交记录。我们现在应该已经清理了以前的缓冲区，
+ * 因此，如果我们处于中止模式，我们现在可以完全跳过日志写入的其余部分。
+ * 
+ * 如果日志需要中止，则返回1，如果成功则返回0
  */
 static int journal_submit_commit_record(journal_t *journal,
 					transaction_t *commit_transaction,
@@ -130,6 +146,8 @@ static int journal_submit_commit_record(journal_t *journal,
 
 	if (is_journal_aborted(journal))
 		return 0;
+
+	printk("我的嵌套: commit.c/ journal_submit_commit_record/ jbd2_journal_get_descriptor_buffer");
 
 	bh = jbd2_journal_get_descriptor_buffer(commit_transaction,
 						JBD2_COMMIT_BLOCK);
@@ -153,10 +171,17 @@ static int journal_submit_commit_record(journal_t *journal,
 	set_buffer_uptodate(bh);
 	bh->b_end_io = journal_end_buffer_io_sync;
 
+	// 打印：现在要在journal_submit_commit_record中提交buffer_head
+	printk("现在要在journal_submit_commit_record中提交buffer_head%llu\n", 
+				(unsigned long long)bh->b_blocknr);
+
 	if (journal->j_flags & JBD2_BARRIER &&
 	    !jbd2_has_feature_async_commit(journal))
 		ret = submit_bh(REQ_OP_WRITE,
 			REQ_SYNC | REQ_PREFLUSH | REQ_FUA, bh);
+			// REQ_SYNC：同步执行。等待写操作完成后再返回
+			// REQ_PREFLUSH：预刷新。在写之前将设备缓存中的数据刷新到磁盘
+			// REQ_FUA：强制更新。强制写入磁盘，不使用缓存（或是不仅仅使用设备缓存？）
 	else
 		ret = submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
 
@@ -499,6 +524,7 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 	 * 但是我们不要求它记住它保留了哪些旧缓冲区。
 	 * 这与现有行为一致，即对同一缓冲区的多个jbd2_journal_get_write_access()调用是完全允许的。
 	 */
+	// 第四步，处理reserved list 》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》
 	while (commit_transaction->t_reserved_list) {
 		jh = commit_transaction->t_reserved_list;
 		JBUFFER_TRACE(jh, "reserved, unused: refile");
@@ -643,6 +669,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 
 			jbd_debug(4, "JBD2: get descriptor\n");
 
+			printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ jbd2_journal_get_descriptor_buffer");
+
 			descriptor = jbd2_journal_get_descriptor_buffer(
 							commit_transaction,
 							JBD2_DESCRIPTOR_BLOCK);
@@ -665,8 +693,16 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			/* Record it so that we can wait for IO
                            completion later */
 			BUFFER_TRACE(descriptor, "ph3: file as descriptor");
+			// 描述符的associated_buffers也会插入到log_bufs(list_head)前面
+
+			// 打印：现在要将descriptor block插入到log_bufs(list_head)前面，descriptor block的磁盘地址是
+			printk("现在要将descriptor block插入到log_bufs列表，des blk磁盘地址是%llu", descriptor->b_blocknr);
+
 			jbd2_file_log_bh(&log_bufs, descriptor);
 		}
+
+		// 注释：jbd2_journal_next_log_block(journal, &blocknr)是决定log从哪里开始的
+		// ckck: 这里的commit_transaction->t_log_start是一样的吗？
 
 		/* Where is the buffer to be written? 要被写的buffer在哪里？*/
 
@@ -678,6 +714,9 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			jbd2_journal_abort(journal, err);
 			continue;
 		}
+
+		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+
 
 		/*
 		 * start_this_handle() uses t_outstanding_credits to determine
@@ -703,8 +742,19 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 		set_bit(BH_JWrite, &jh2bh(jh)->b_state);
 		JBUFFER_TRACE(jh, "ph3: write metadata");	// 下面这行是写元数据的函数吧
 		// 输入journal头jh，journal开始块号blocknr，要将journal写入的commit_trans，得到要写的wbuf
+
+		// 现在开始写metadata buffer
 		flags = jbd2_journal_write_metadata_buffer(commit_transaction,
 						jh, &wbuf[bufs], blocknr);
+						// 这里通过打印知道wbuf[bufs]->b_block_nr = blocknr
+
+		
+		// 打印wbuf[bufs]的blocknr（也即上面传入的参数blocknr），这是journal写入的物理块号
+		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: blocknr: %llu", (unsigned long long)blocknr);
+		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: jh2bh(jh)->b_blocknr: %llu", (unsigned long long)jh2bh(jh)->b_blocknr);
+
+
+
 		if (flags < 0) {
 			jbd2_journal_abort(journal, flags);
 			continue;
@@ -926,7 +976,7 @@ start_journal_io:
 
 		BUFFER_TRACE(bh, "ph5: control buffer writeout done: unfile");
 		clear_buffer_jwrite(bh);
-		jbd2_unfile_log_bh(bh);
+		jbd2_unfile_log_bh(bh);		// 将bh->associated_buffers从log_bufs(list_head)中移除并初始化
 		__brelse(bh);		/* One for getblk */
 		/* AKPM: bforget here */
 	}
@@ -960,6 +1010,8 @@ start_journal_io:
 	 * Now disk caches for filesystem device are flushed so we are safe to
 	 * erase checkpointed transactions from the log by updating journal
 	 * superblock.
+	 * 
+	 * 现在文件系统设备的磁盘缓存已刷新，因此我们可以通过更新日志超级块来擦除日志中的检查点事务。
 	 */
 	if (update_tail)
 		jbd2_update_log_tail(journal, first_tid, first_block);
