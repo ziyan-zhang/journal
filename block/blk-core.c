@@ -2305,7 +2305,11 @@ EXPORT_SYMBOL(generic_make_request);
  * submit_bio() is very similar in purpose to generic_make_request(), and
  * uses that function to do most of the work. Both are fairly rough
  * interfaces; @bio must be presetup and ready for I/O.
- *
+ * 
+ * 提交一个bio到块设备层进行I/O
+ * 
+ * submit_bio（）在目的上与generic_make_request（）非常相似，并使用该函数来完成大部分工作。
+ * 这两者都是相当粗糙的接口； @bio必须预先设置并准备好进行I/O。
  */
 blk_qc_t submit_bio(struct bio *bio)
 {

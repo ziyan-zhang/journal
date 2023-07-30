@@ -3113,6 +3113,8 @@ static int submit_bh_wbc(int op, int op_flags, struct buffer_head *bh,
 
 	/*
 	 * Only clear out a write error when rewriting
+	 *
+	 * 仅在重写时清除写入错误
 	 */
 	if (test_set_buffer_req(bh) && (op == REQ_OP_WRITE))
 		clear_buffer_write_io_error(bh);
@@ -3143,7 +3145,9 @@ static int submit_bh_wbc(int op, int op_flags, struct buffer_head *bh,
 	bio->bi_end_io = end_bio_bh_io_sync;
 	bio->bi_private = bh;
 
-	/* Take care of bh's that straddle the end of the device */
+	/* Take care of bh's that straddle the end of the device 
+	* 处理跨越设备末尾的bh
+	*/
 	guard_bio_eod(op, bio);
 
 	if (buffer_meta(bh))
@@ -3348,9 +3352,19 @@ int try_to_free_buffers(struct page *page)
 	 * private_lock must be held over this entire operation in order
 	 * to synchronise against __set_page_dirty_buffers and prevent the
 	 * dirty bit from being lost.
+	 * 
+	 * 如果文件系统手动写入其缓冲区（例如ext3），则我们可以在脏页上有干净的缓冲区。
+	 * 我们在这里清理页面；否则VM将永远不会注意到文件系统是否执行任何IO。
+	 * 
+	 * 注：文件系统自己把脏缓冲区刷盘了，这样的话，脏页上的数据就跟盘上一样了，就不脏了。
+	 * 但是VM不知道这一点，可能还要刷一次盘；所以告诉VM，这些页其实已经不脏了。
+	 * 
+	 * 此外，在截断期间，discard_buffer将标记所有页面的缓冲区为干净。我们在这里发现并清理页面。
+	 * 
+	 * 必须在整个操作中保持private_lock，以便与__set_page_dirty_buffers同步，并防止丢失脏位。
 	 */
 	if (ret)
-		cancel_dirty_page(page);
+		cancel_dirty_page(page);	// 取消脏页标记
 	spin_unlock(&mapping->private_lock);
 out:
 	if (buffers_to_free) {
