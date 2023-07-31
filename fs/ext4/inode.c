@@ -4572,6 +4572,10 @@ make_io:
 		trace_ext4_load_inode(inode);
 		get_bh(bh);
 		bh->b_end_io = end_buffer_read_sync;
+
+		printk("我的提交: ext4/inode.c/ __ext4_get_inode_loc, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 		submit_bh(REQ_OP_READ, REQ_META | REQ_PRIO, bh);
 		wait_on_buffer(bh);
 		if (!buffer_uptodate(bh)) {

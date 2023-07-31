@@ -1451,6 +1451,10 @@ static int jbd2_write_superblock(journal_t *journal, int write_flags)
 	jbd2_superblock_csum_set(journal, sb);
 	get_bh(bh);
 	bh->b_end_io = end_buffer_write_sync;
+
+	printk("我的提交: jbd2/journal.c/ jbd2_write_superblock, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 	ret = submit_bh(REQ_OP_WRITE, write_flags, bh);
 	wait_on_buffer(bh);
 	if (buffer_write_io_error(bh)) {

@@ -172,8 +172,7 @@ static int journal_submit_commit_record(journal_t *journal,
 	bh->b_end_io = journal_end_buffer_io_sync;
 
 	// 打印：现在要在journal_submit_commit_record中提交buffer_head
-	printk("现在要在journal_submit_commit_record中提交buffer_head%llu\n", 
-				(unsigned long long)bh->b_blocknr);
+	printk("我的提交: jbd2/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 	if (journal->j_flags & JBD2_BARRIER &&
 	    !jbd2_has_feature_async_commit(journal))
@@ -701,7 +700,6 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			jbd2_file_log_bh(&log_bufs, descriptor);
 		}
 
-		// 注释：jbd2_journal_next_log_block(journal, &blocknr)是决定log从哪里开始的
 		// ckck: 这里的commit_transaction->t_log_start是一样的吗？
 
 		/* Where is the buffer to be written? 要被写的buffer在哪里？*/
@@ -820,6 +818,10 @@ start_journal_io:
 				clear_buffer_dirty(bh);
 				set_buffer_uptodate(bh);
 				bh->b_end_io = journal_end_buffer_io_sync;
+
+				printk("我的提交: jbd2/commit.c/ jbd2_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 				submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
 			}
 			cond_resched();		// 调度让步，ckck: 合理吗？
@@ -885,6 +887,7 @@ start_journal_io:
 
 	/* Done it all: now write the commit record asynchronously. */
 	if (jbd2_has_feature_async_commit(journal)) {
+		printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						 &cbh, crc32_sum);
 		if (err)
@@ -991,6 +994,7 @@ start_journal_io:
 	write_unlock(&journal->j_state_lock);
 
 	if (!jbd2_has_feature_async_commit(journal)) {
+		printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						&cbh, crc32_sum);
 		if (err)

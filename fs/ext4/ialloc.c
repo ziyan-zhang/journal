@@ -195,6 +195,10 @@ ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
 	trace_ext4_load_inode_bitmap(sb, block_group);
 	bh->b_end_io = ext4_end_bitmap_read;
 	get_bh(bh);
+
+	printk("我的提交: ext4/ialloc.c/ ext4_read_inode_bitmap, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 	submit_bh(REQ_OP_READ, REQ_META | REQ_PRIO, bh);
 	wait_on_buffer(bh);
 	if (!buffer_uptodate(bh)) {

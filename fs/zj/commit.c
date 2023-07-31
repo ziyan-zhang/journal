@@ -190,6 +190,9 @@ static int journal_submit_commit_record(zjournal_t *journal,
 	set_buffer_uptodate(bh);
 	bh->b_end_io = journal_end_buffer_io_sync;
 
+	printk("我的提交: zj/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 	if (journal->j_flags & ZJ_BARRIER &&
 			!zj_has_feature_async_commit(journal))
 		ret = submit_bh(REQ_OP_WRITE,
@@ -840,6 +843,10 @@ start_journal_io:
 				clear_buffer_dirty(bh);
 				set_buffer_uptodate(bh);
 				bh->b_end_io = journal_end_buffer_io_sync;
+
+				printk("我的提交: zj/commit.c/ zj_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+
+
 				submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
 			}
 			cond_resched();
@@ -898,6 +905,7 @@ start_journal_io:
 
 	/* Done it all: now write the commit record asynchronously. */
 	if (zj_has_feature_async_commit(journal)) {
+		printk("我的嵌套: commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						 &cbh, crc32_sum);
 		if (err)
@@ -998,6 +1006,7 @@ start_journal_io:
 	write_unlock(&journal->j_state_lock);
 
 	if (!zj_has_feature_async_commit(journal)) {
+		printk("我的嵌套: commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						&cbh, crc32_sum);
 		if (err)
