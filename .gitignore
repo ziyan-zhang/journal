@@ -126,3 +126,8 @@ all.config
 # linux被编译到该文件夹
 Linux_compiled
 play_ground/a.out
+
+# 用于测试的虚拟盘
+*.qcow2
+*.img
+*.swap
