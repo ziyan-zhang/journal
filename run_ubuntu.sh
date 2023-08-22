@@ -6,11 +6,14 @@
  # @FilePath: /z-journal/run_ubuntu.sh
  # @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 ### 
-qemu-system-x86_64 -m 2048 --enable-kvm ~/lab/ubuntu.img \
-	-hdb ~/lab/swap_ext4.img \
-	-device nvme,drive=nvme1,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext2.qcow2,format=qcow2,if=none,cache=writeback,id=nvme1 \
-	-device nvme,drive=nvme2,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext4.qcow2,format=qcow2,if=none,cache=writeback,id=nvme2 \
-	-device nvme,drive=nvme3,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext4_mj.qcow2,format=qcow2,if=none,cache=writeback,id=nvme3 \
+qemu-system-x86_64 -m 8192 -smp 6 --enable-kvm ./ubuntu_20g.img \
+	-cpu host -serial mon:stdio \
+	-hdb ./ext4.swap \
+	-hdc ./sdc.img \
+	-drive id=nvme0,if=none,format=qcow2,file=./exe.img \
+	-device nvme,drive=nvme0,serial=000,max_ioqpairs=16 \
+	-drive id=nvme1,if=none,format=qcow2,file=./ext4.qcow2 \
+	-device nvme,drive=nvme1,serial=001,max_ioqpairs=16 \
+	-drive id=nvme2,if=none,format=qcow2,file=./ext2.qcow2 \
+	-device nvme,drive=nvme2,serial=002,max_ioqpairs=16 \
+	-net user,hostfwd=::2222-:22 -net nic

@@ -1,12 +1,14 @@
-qemu-system-x86_64 -s -S\
-	-nographic -smp 2 -m 2048 --enable-kvm \
+qemu-system-x86_64 -smp 6 -m 8192 \
+	-nographic -serial mon:stdio  --enable-kvm -cpu host\
 	-kernel Linux_compiled/arch/x86_64/boot/bzImage \
-	-hda ~/lab/ubuntu.img \
 	-append "root=/dev/sda2 rw console=ttyS0" \
-	-hdb /home/zy/lab/swap_ext4.img \
-	-device nvme,drive=nvme1,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext2.qcow2,format=qcow2,if=none,cache=writeback,id=nvme1 \
-	-device nvme,drive=nvme2,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext4.qcow2,format=qcow2,if=none,cache=writeback,id=nvme2 \
-	-device nvme,drive=nvme3,serial=deadbeaf,max_ioqpairs=8 \
-	-drive file=/home/zy/lab/ext4_mj.qcow2,format=qcow2,if=none,cache=writeback,id=nvme3
+	-hda ./ubuntu_20g.img \
+	-drive file=./ext4.swap,format=raw \
+	-drive file=./sdc.img,format=raw \
+	-drive id=nvme0,if=none,format=qcow2,file=./exe.img \
+	-device nvme,drive=nvme0,serial=000,max_ioqpairs=16 \
+	-drive id=nvme1,if=none,format=qcow2,file=./ext4.qcow2 \
+	-device nvme,drive=nvme1,serial=001,max_ioqpairs=16 \
+	-drive id=nvme2,if=none,format=qcow2,file=./ext2.qcow2 \
+	-device nvme,drive=nvme2,serial=002,max_ioqpairs=16 \
+	-net user,hostfwd=::2222-:22 -net nic
