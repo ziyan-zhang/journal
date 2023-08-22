@@ -147,7 +147,7 @@ static int journal_submit_commit_record(journal_t *journal,
 	if (is_journal_aborted(journal))
 		return 0;
 
-	printk("我的嵌套: commit.c/ journal_submit_commit_record/ jbd2_journal_get_descriptor_buffer");
+	printk(KERN_DEBUG "我的嵌套: jbd2/commit.c/ journal_submit_commit_record/ jbd2_journal_get_descriptor_buffer");
 
 	bh = jbd2_journal_get_descriptor_buffer(commit_transaction,
 						JBD2_COMMIT_BLOCK);
@@ -172,7 +172,7 @@ static int journal_submit_commit_record(journal_t *journal,
 	bh->b_end_io = journal_end_buffer_io_sync;
 
 	// 打印：现在要在journal_submit_commit_record中提交buffer_head
-	printk("我的提交: jbd2/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: jbd2/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 	if (journal->j_flags & JBD2_BARRIER &&
 	    !jbd2_has_feature_async_commit(journal))
@@ -668,7 +668,7 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 
 			jbd_debug(4, "JBD2: get descriptor\n");
 
-			printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ jbd2_journal_get_descriptor_buffer");
+			printk(KERN_DEBUG "我的嵌套: jbd2/commit.c/ jbd2_journal_commit_transaction/ jbd2_journal_get_descriptor_buffer");
 
 			descriptor = jbd2_journal_get_descriptor_buffer(
 							commit_transaction,
@@ -713,7 +713,7 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 			continue;
 		}
 
-		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+		printk(KERN_DEBUG "我的块号: jbd2/commit.c/ jbd2_journal_commit_transaction, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
 
 
 		/*
@@ -748,8 +748,8 @@ void jbd2_journal_commit_transaction(journal_t *journal)
 
 		
 		// 打印wbuf[bufs]的blocknr（也即上面传入的参数blocknr），这是journal写入的物理块号
-		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: blocknr: %llu", (unsigned long long)blocknr);
-		printk("我的块号: commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: jh2bh(jh)->b_blocknr: %llu", (unsigned long long)jh2bh(jh)->b_blocknr);
+		printk(KERN_DEBUG "我的块号: jbd2/commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: blocknr: %llu", (unsigned long long)blocknr);
+		printk(KERN_DEBUG "我的块号: jbd2/commit.c/ jbd2_journal_commit_transaction, jbd2_journal_write_metadata_buffer: jh2bh(jh)->b_blocknr: %llu", (unsigned long long)jh2bh(jh)->b_blocknr);
 
 
 
@@ -819,7 +819,7 @@ start_journal_io:
 				set_buffer_uptodate(bh);
 				bh->b_end_io = journal_end_buffer_io_sync;
 
-				printk("我的提交: jbd2/commit.c/ jbd2_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+				printk(KERN_DEBUG "我的提交: jbd2/commit.c/ jbd2_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 				submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
@@ -887,7 +887,7 @@ start_journal_io:
 
 	/* Done it all: now write the commit record asynchronously. */
 	if (jbd2_has_feature_async_commit(journal)) {
-		printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
+		printk(KERN_DEBUG "我的嵌套: jbd2/commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						 &cbh, crc32_sum);
 		if (err)
@@ -994,7 +994,7 @@ start_journal_io:
 	write_unlock(&journal->j_state_lock);
 
 	if (!jbd2_has_feature_async_commit(journal)) {
-		printk("我的嵌套: commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
+		printk(KERN_DEBUG "我的嵌套: jbd2/commit.c/ jbd2_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						&cbh, crc32_sum);
 		if (err)

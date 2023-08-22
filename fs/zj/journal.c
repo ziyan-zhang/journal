@@ -966,6 +966,9 @@ zj_journal_get_descriptor_buffer(ztransaction_t *transaction, int type)
 
 	err = zj_journal_next_log_block(journal, &blocknr);
 
+	printk(KERN_DEBUG "我的块号: zj/journal.c/ zj_journal_get_descriptor_buffer, zj_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+
+
 	if (err)
 		return NULL;
 
@@ -1615,7 +1618,7 @@ static int zj_write_superblock(zjournal_t *journal, int write_flags)
 	get_bh(bh);
 	bh->b_end_io = end_buffer_write_sync;
 
-	printk("我的提交: zj/journal.c/ zj_write_superblock, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: zj/journal.c/ zj_write_superblock, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 	ret = submit_bh(REQ_OP_WRITE, write_flags, bh);
 	wait_on_buffer(bh);

@@ -53,7 +53,7 @@ static int write_mmp_block(struct super_block *sb, struct buffer_head *bh)
 	bh->b_end_io = end_buffer_write_sync;
 	get_bh(bh);
 
-	printk("我的提交: ext4/mmp.c/ write_mmp_block, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: ext4/mmp.c/ write_mmp_block, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 	submit_bh(REQ_OP_WRITE, REQ_SYNC | REQ_META | REQ_PRIO, bh);
@@ -93,7 +93,7 @@ static int read_mmp_block(struct super_block *sb, struct buffer_head **bh,
 	lock_buffer(*bh);
 	(*bh)->b_end_io = end_buffer_read_sync;
 
-	printk("我的提交: ext4/mmp.c/ read_mmp_block, submit_bh: %llu\n", (unsigned long long)(*bh)->b_blocknr);
+	printk(KERN_DEBUG "我的提交: ext4/mmp.c/ read_mmp_block, submit_bh: %llu\n", (unsigned long long)(*bh)->b_blocknr);
 
 	submit_bh(REQ_OP_READ, REQ_META | REQ_PRIO, *bh);
 	wait_on_buffer(*bh);

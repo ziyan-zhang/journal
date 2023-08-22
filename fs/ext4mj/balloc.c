@@ -497,7 +497,7 @@ ext4mj_read_block_bitmap_nowait(struct super_block *sb, ext4mj_group_t block_gro
 	bh->b_end_io = ext4mj_end_bitmap_read;
 	get_bh(bh);
 
-	printk("我的提交: ext4mj/balloc.c/ ext4mj_read_block_bitmap_nowait, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: ext4mj/balloc.c/ ext4mj_read_block_bitmap_nowait, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 	submit_bh(REQ_OP_READ, REQ_META | REQ_PRIO, bh);

@@ -190,7 +190,7 @@ static int journal_submit_commit_record(zjournal_t *journal,
 	set_buffer_uptodate(bh);
 	bh->b_end_io = journal_end_buffer_io_sync;
 
-	printk("我的提交: zj/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: zj/commit.c/ journal_submit_commit_record, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 	if (journal->j_flags & ZJ_BARRIER &&
@@ -737,6 +737,9 @@ void zj_journal_commit_transaction(zjournal_t *journal)
 			continue;
 		}
 
+		printk(KERN_DEBUG "我的块号: zj/commit.c/ zj_journal_commit_transaction, zj_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+
+
 		/*
 		 * start_this_handle() uses t_outstanding_credits to determine
 		 * the free space in the log, but this counter is changed
@@ -759,6 +762,12 @@ repeat_meta:
 		JBUFFER_TRACE(jh, "ph3: write metadata");
 		flags = zj_journal_write_metadata_buffer(commit_transaction,
 						jh, &wbuf[bufs], blocknr);
+
+		printk(KERN_DEBUG "我的块号: zj/commit.c/ zj_journal_commit_transaction, zj_journal_write_metadata_buffer: blocknr: %llu", (unsigned long long)blocknr);
+		printk(KERN_DEBUG "我的块号: zj/commit.c/ zj_journal_commit_transaction, zj_journal_write_metadata_buffer: jh2bh(jh)->b_blocknr: %llu", (unsigned long long)jh2bh(jh)->b_blocknr);
+
+
+
 		if (!jh || !jh2bh(jh)) {
 			panic("no jh2bh\n");
 		}
@@ -844,7 +853,7 @@ start_journal_io:
 				set_buffer_uptodate(bh);
 				bh->b_end_io = journal_end_buffer_io_sync;
 
-				printk("我的提交: zj/commit.c/ zj_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+				printk(KERN_DEBUG "我的提交: zj/commit.c/ zj_journal_commit_transaction, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 				submit_bh(REQ_OP_WRITE, REQ_SYNC, bh);
@@ -905,7 +914,7 @@ start_journal_io:
 
 	/* Done it all: now write the commit record asynchronously. */
 	if (zj_has_feature_async_commit(journal)) {
-		printk("我的嵌套: commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
+		printk(KERN_DEBUG "我的嵌套: zj/commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						 &cbh, crc32_sum);
 		if (err)
@@ -1006,7 +1015,7 @@ start_journal_io:
 	write_unlock(&journal->j_state_lock);
 
 	if (!zj_has_feature_async_commit(journal)) {
-		printk("我的嵌套: commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
+		printk(KERN_DEBUG "我的嵌套: zj/commit.c/ zj_journal_commit_transaction/ journal_submit_commit_record");
 		err = journal_submit_commit_record(journal, commit_transaction,
 						&cbh, crc32_sum);
 		if (err)

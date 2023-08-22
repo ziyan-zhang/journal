@@ -601,7 +601,7 @@ static void write_one_revoke_record(transaction_t *transaction,
 
 	if (!descriptor) {
 
-		printk("我的嵌套: revoke.c/ write_one_revoke_record, jbd2_journal_get_descriptor_buffer");
+		printk(KERN_DEBUG "我的嵌套: jbd2/revoke.c/ write_one_revoke_record, jbd2_journal_get_descriptor_buffer");
 
 
 		descriptor = jbd2_journal_get_descriptor_buffer(transaction,

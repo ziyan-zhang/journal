@@ -531,7 +531,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 
 	// 如果file->f_path.dentry->d_name.name是example.txt，让程序停在此处
 	if (strcmp(file->f_path.dentry->d_name.name, "example.txt") == 0) {
-		printk("我的vfs_write: %s\n", file->f_path.dentry->d_name.name);		
+		printk(KERN_DEBUG "我的断点: read_write.c/ vfs_write: %s\n", file->f_path.dentry->d_name.name);
 	}
 
 	if (!(file->f_mode & FMODE_WRITE))

@@ -899,7 +899,7 @@ jbd2_journal_get_descriptor_buffer(transaction_t *transaction, int type)
 
 	err = jbd2_journal_next_log_block(journal, &blocknr);
 
-	printk("我的块号: journal.c/ jbd2_journal_get_descriptor_buffer, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
+	printk(KERN_DEBUG "我的块号: jbd2/journal.c/ jbd2_journal_get_descriptor_buffer, jbd2_journal_next_log_block: blocknr: %llu", (unsigned long long)blocknr);
 
 
 	if (err)
@@ -1452,7 +1452,7 @@ static int jbd2_write_superblock(journal_t *journal, int write_flags)
 	get_bh(bh);
 	bh->b_end_io = end_buffer_write_sync;
 
-	printk("我的提交: jbd2/journal.c/ jbd2_write_superblock, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+	printk(KERN_DEBUG "我的提交: jbd2/journal.c/ jbd2_write_superblock, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 	ret = submit_bh(REQ_OP_WRITE, write_flags, bh);

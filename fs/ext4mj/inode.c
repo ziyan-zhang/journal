@@ -4580,7 +4580,7 @@ make_io:
 		bh->b_end_io = end_buffer_read_sync;
 		submit_bh(REQ_OP_READ, REQ_META | REQ_PRIO, bh);
 
-		printk("我的提交: ext4mj/inode.c/ __ext4mj_get_inode_loc, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
+		printk(KERN_DEBUG "我的提交: ext4mj/inode.c/ __ext4mj_get_inode_loc, submit_bh: %llu\n", (unsigned long long)bh->b_blocknr);
 
 
 		wait_on_buffer(bh);
